@@ -1,7 +1,8 @@
 # Configuration
 
-> **Design document.** The server does not exist yet — no setting here does
-> anything today. See the [README](../README.md) for status.
+> Every setting here is implemented. The package is not published yet, so run
+> the commands below as `node dist/cli.js …` from a source build until it is —
+> see [installing](../README.md#step-2--install).
 
 Every setting can be left alone. The defaults are chosen to be safe and quiet:
 read-only, conservative with your API quota, no surprises.
@@ -183,11 +184,12 @@ The 24-hour default means a newly added subscription can take a day to appear.
 When that bothers you, clear the cache instead of lowering the TTL:
 
 ```bash
-npx -y feedly-mcp doctor --refresh
+node dist/cli.js doctor --refresh
 ```
 
-The cache is keyed by the account ID from `/v3/profile`, so switching tokens
-cannot serve you another account's data. To clear it:
+Entries are namespaced by a one-way hash of your token, so switching tokens
+cannot serve you the previous account's data — and the token itself is never
+written to disk. To clear everything:
 
 ```bash
 rm -rf ~/.cache/feedly-mcp
@@ -267,7 +269,7 @@ bulk_mark_read = false
 ## Checking what is actually in effect
 
 ```bash
-npx -y feedly-mcp doctor
+node dist/cli.js doctor
 ```
 
 `doctor` prints the resolved configuration, says which source each value came

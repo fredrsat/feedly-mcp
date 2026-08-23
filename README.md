@@ -3,22 +3,10 @@
 Read your Feedly subscriptions from Claude. Ask *"what's new in my AI feeds?"* and
 get an answer, without opening a browser.
 
-> ## ⚠️ Not published yet
->
-> The server works — all six tools have been exercised against a live Feedly
-> account — but it is **not on npm and there are no releases**, so the `npx` and
-> `.mcpb` instructions below will not work yet.
->
-> To try it today, clone the repo and build from source:
->
-> ```bash
-> git clone https://github.com/fredrsat/feedly-mcp && cd feedly-mcp
-> npm install && npm run build
-> FEEDLY_TOKEN=your-token node dist/cli.js doctor
-> ```
->
-> Then point your MCP client at `node /absolute/path/to/dist/cli.js` instead of
-> `npx -y feedly-mcp`.
+> **Not published yet.** The server works and all six tools have been exercised
+> against a live account, but it is not on npm and there are no releases.
+> [Install from source](#step-2--install) — that path works today; the `npx` and
+> `.mcpb` ones do not.
 
 ---
 
@@ -86,74 +74,70 @@ Everything runs on your own machine.
 
 ## Step 2 — Install
 
-> **Not available yet.** All three paths below depend on a published artifact —
-> an npm package or an `.mcpb` bundle — and neither exists. This section is the
-> plan, not instructions you can follow today.
-
-Pick **one** of the three paths below.
-
-### Option A — Claude Desktop, one-click (easiest)
-
-1. Download the latest `feedly-mcp.mcpb` from the repository's Releases page.
-   *(No releases published yet.)*
-2. Open Claude Desktop → **Settings** → **Extensions**.
-3. Drag the `.mcpb` file into the window.
-4. A settings form appears. Paste your token into **Feedly API token** and click
-   install.
-
-Your token goes into your operating system's keychain, not into a plain-text
-file. Everything in [Configuration](docs/configuration.md) is editable from this
-same form.
-
-### Option B — Claude Desktop, manual config
-
-1. Open your Claude Desktop config file:
-
-   | OS | Path |
-   |---|---|
-   | macOS | `~/Library/Application Support/Claude/claude_desktop_config.json` |
-   | Windows | `%APPDATA%\Claude\claude_desktop_config.json` |
-
-   If the file does not exist, create it with `{}` as its contents.
-
-2. Add a `feedly` entry:
-
-   ```json
-   {
-     "mcpServers": {
-       "feedly": {
-         "command": "npx",
-         "args": ["-y", "feedly-mcp"],
-         "env": {
-           "FEEDLY_TOKEN": "paste-your-token-here"
-         }
-       }
-     }
-   }
-   ```
-
-   Already have other servers under `mcpServers`? Add `feedly` alongside them —
-   don't replace the block.
-
-3. **Restart Claude Desktop completely.** Closing the window is not enough; quit
-   the application.
-
-4. Look for the tools icon in the message box. `feedly` should be listed.
-
-### Option C — Claude Code
+### Build from source — the only path that works today
 
 ```bash
-claude mcp add feedly --env FEEDLY_TOKEN=paste-your-token-here -- npx -y feedly-mcp
+git clone https://github.com/fredrsat/feedly-mcp
+cd feedly-mcp
+npm install
+npm run build
 ```
 
-Verify it registered:
+Then store your token in a file only you can read, so it never has to go into a
+client config in plain text:
 
 ```bash
-claude mcp list
+mkdir -p ~/.config/feedly-mcp
+printf '%s' 'paste-your-token-here' > ~/.config/feedly-mcp/token
+chmod 600 ~/.config/feedly-mcp/token
 ```
 
-Run `claude mcp add --help` if your version expects a different flag for
-environment variables.
+The server refuses to read that file if it is group- or world-readable, and tells
+you how to fix it.
+
+Register it with your client, using an **absolute path** to the built entry point:
+
+```bash
+# Claude Code — --scope user makes it available in every directory
+claude mcp add feedly --scope user -- node /absolute/path/to/feedly-mcp/dist/cli.js
+
+claude mcp list   # should report: feedly ... ✔ Connected
+```
+
+For Claude Desktop, add this to
+`~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or
+`%APPDATA%\Claude\claude_desktop_config.json` (Windows), then quit and reopen the
+application — closing the window does not reload MCP servers:
+
+```json
+{
+  "mcpServers": {
+    "feedly": {
+      "command": "node",
+      "args": ["/absolute/path/to/feedly-mcp/dist/cli.js"]
+    }
+  }
+}
+```
+
+Already have other servers under `mcpServers`? Add `feedly` alongside them rather
+than replacing the block.
+
+If you move the repository afterwards, re-register it — the path is absolute.
+Rebuilding in place is picked up automatically.
+
+### Once published
+
+Neither of these works yet; they are what installing will look like after the
+first release.
+
+**One-click, Claude Desktop.** Download `feedly-mcp.mcpb` from the Releases page
+and drag it into **Settings → Extensions**. A settings form appears; the token
+goes into your operating system's keychain rather than a plain-text file, and
+everything in [Configuration](docs/configuration.md) is editable from that form.
+
+**From npm.** `npx -y feedly-mcp` as the command, with `FEEDLY_TOKEN` in the
+client's `env` block, or the token file above.
 
 ---
 
@@ -162,23 +146,33 @@ environment variables.
 Before asking Claude anything, confirm the connection from your terminal:
 
 ```bash
-FEEDLY_TOKEN=paste-your-token-here npx -y feedly-mcp doctor
+node dist/cli.js doctor
 ```
 
 A healthy result looks like this:
 
 ```
-✓ Token found          (environment variable FEEDLY_TOKEN)
-✓ Connected to Feedly   you@example.com
-✓ 8 folders
+✓ Config loaded from /Users/you/.config/feedly-mcp/config.toml
+    scope.default_folder = Tech  ← file
 
-  Tech                    70 feeds   user/<uuid>/category/Tech
-  Tech - Research         11 feeds   user/<uuid>/category/<uuid>
-  Tech - Tooling           6 feeds   user/<uuid>/category/<uuid>
+✓ Token found        (file /Users/you/.config/feedly-mcp/token)
+✓ Connected to Feedly you@example.com
+    plan: FeedlyProYearly
+✓ 8 folders, 70 feeds
+
+  Tech             70 feeds  4317 unread  user/<uuid>/category/Tech
+  Tech - Research  11 feeds    68 unread  user/<uuid>/category/<uuid>
+  Tech - Tooling    6 feeds   171 unread  user/<uuid>/category/<uuid>
   …
 
-  API calls used today: 1 of 50   (resets in 11h34m)
+  API calls used today: 4 of 50   (resets in 11h34m)
+  This server's budget: 40/day, 10/session — 4 used just now
+
+✓ Everything checks out.
 ```
+
+Useful flags: `-v` prints every resolved setting and where it came from,
+`--refresh` clears the cache first.
 
 `doctor` never prints your token. Use the folder list it gives you when filling
 in `scope` in step 4.
@@ -334,6 +328,25 @@ rm -rf ~/.cache/feedly-mcp
 
 ---
 
+## Development
+
+```bash
+npm run build      # compile to dist/
+npm test           # 104 tests, no API calls
+npm run typecheck  # tsc --noEmit
+```
+
+There is also an end-to-end check that drives the built server over stdio as a
+real MCP client and exercises every tool against your account. It costs a handful
+of API calls out of the daily 50, and prints the remaining quota as it goes:
+
+```bash
+node --env-file=.env scripts/smoke.mjs
+```
+
+`mark_read` is only exercised in its refusal paths, there and everywhere else.
+It is irreversible, so there is no safe way to test the success path.
+
 ## Contributing
 
 Issues and pull requests welcome. The design rationale — including which
@@ -341,6 +354,9 @@ features are deliberately excluded — lives in
 [feedlymcpspec.md](feedlymcpspec.md). Read it before proposing a feature; if
 your idea is in the "not in scope" list, that is a decision rather than an
 oversight, though it is one you are welcome to argue with.
+
+The spec and these docs are the contract. If you change a return shape or a
+config key, change both together or neither.
 
 ## License
 
