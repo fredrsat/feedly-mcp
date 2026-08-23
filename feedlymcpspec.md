@@ -425,6 +425,13 @@ krever e-post til support. Derfor:
 - **`unsubscribe` implementeres ikke.** Det er sletting av brukerens data, uten
   angremulighet, utført av en agent. Verdien står ikke i forhold. La folk si opp
   abonnementer i Feedly.
+- **Et felt som rapporterer hva en skriveoperasjon gjorde, må måles — ikke
+  antas.** Feedly returnerer ingen telling for markering på mappenivå. Første
+  implementasjon returnerte mappas ulestetall *før* kallet under navnet
+  `marked_approximately`, med en fotnote som forklarte det. I bruk leste det som
+  suksess: en feie som traff ingenting rapporterte et femsifret tall. Fotnoter
+  taper mot feltnavn. Mål differansen i stedet, og returner `null` når den ikke
+  lar seg måle.
 - Skriveoperasjoner går alltid live til Feedly og skal invalidere berørte
   cache-oppføringer. **Berørte er mer enn tellerne:** et cachet `unreadOnly`-svar
   inneholder fortsatt artiklene som nettopp ble markert lest, og ville servert

@@ -22,6 +22,28 @@ const PAGE_SIZE = 100;
 /** Stop runaway pagination even when the budget would allow more. */
 const MAX_PAGES = 5;
 
+/**
+ * How far back the returned articles actually reach.
+ *
+ * `limit` bites before `hours` does on a busy folder — asking for 24 hours and
+ * getting 320 articles can silently cover eight. Measured on one account: an
+ * umbrella folder produced ~42 articles/hour, so any generous limit is spent
+ * long before the requested window is. Without this the caller has no way to
+ * tell, because `window_hours` reports what was asked for, not what arrived.
+ */
+export function coverageHours(
+  requestedHours: number,
+  truncated: boolean,
+  oldestPublished: number | undefined,
+  now: number = Date.now(),
+): number {
+  if (!truncated || !oldestPublished) return requestedHours;
+  const hours = (now - oldestPublished) / 3_600_000;
+  // A future or garbage timestamp must not report negative coverage.
+  if (!Number.isFinite(hours) || hours <= 0) return requestedHours;
+  return Math.min(requestedHours, Math.round(hours * 10) / 10);
+}
+
 interface StreamChoice {
   streamId: string;
   label: string;
@@ -172,12 +194,25 @@ export function registerGetArticles(server: McpServer, ctx: Context): void {
         const truncated = articles.length > limit || Boolean(continuation) || Boolean(stoppedEarly);
         if (articles.length > limit) articles = articles.slice(0, limit);
 
+        const oldest = articles.at(-1)?.published;
+        const coveredHours = coverageHours(hours, truncated, oldest);
+
         return {
           articles,
           count: articles.length,
           truncated,
           folder: choice.label,
           window_hours: hours,
+          covered_hours: coveredHours,
+          ...(truncated &&
+            oldest && {
+              covered_since: oldest,
+              coverage_note:
+                `Asked for ${hours}h but hit the limit of ${limit} first, so this ` +
+                `covers roughly the last ${coveredHours}h. To reach further back, ` +
+                `narrow the folder rather than raising the limit — a bigger response ` +
+                `costs more quota and more context for the same blind spot.`,
+            }),
           ...(clamped && {
             note:
               `Requested ${requestedHours} hours, clamped to ${hours}. Feedly returns ` +

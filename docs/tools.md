@@ -150,9 +150,28 @@ actually read.
   "truncated": false,
   "folder": "AI - Research",
   "window_hours": 72,
+  "covered_hours": 72,
   "meta": { … }
 }
 ```
+
+### `window_hours` is what you asked for; `covered_hours` is what you got
+
+On a busy folder `limit` runs out long before `hours` does. Measured on one
+account, an umbrella folder produced about **42 articles an hour** — so
+`hours: 24, limit: 320` covered under eight hours, and nothing in the response
+said so.
+
+When a result is truncated you also get `covered_since` (the oldest article's
+timestamp) and a `coverage_note`. A real response:
+
+```json
+{ "count": 20, "truncated": true, "window_hours": 24, "covered_hours": 1.7 }
+```
+
+Raising `limit` is usually the wrong response: it costs more quota and more
+context to move the blind spot slightly. Narrow the folder, or accept the window
+you actually have.
 
 `truncated` is `true` when more matched than `limit` allowed, when the stream had
 further pages, or when the budget stopped pagination early. Ask for a narrower
@@ -308,18 +327,45 @@ By article:
 { "marked": 12, "scope": "12 articles by ID", "permanent": true, "meta": { … } }
 ```
 
-By folder — Feedly returns no count for a category-level mark, so the figure is
-the folder's unread count taken *before* the call, and is named accordingly:
+By folder — Feedly returns no count for a category-level mark, so it is measured
+by reading the unread total before and immediately after:
 
 ```json
 {
-  "marked_approximately": 68,
+  "marked": 6360,
+  "unread_before": 6372,
+  "unread_after": 12,
   "scope": "folder:AI - Research older than 7d",
   "permanent": true,
-  "note": "Feedly does not return a count for folder-level marking. …",
+  "note": "…",
   "meta": { … }
 }
 ```
+
+`marked` is `null` when the follow-up count could not be read — the write still
+happened; call `unread_counts` to see the effect.
+
+> **This used to lie.** An earlier version returned the *before* count under the
+> name `marked_approximately`, so a sweep that matched nothing reported a
+> five-figure number that read like success. If you have automation parsing that
+> field, it is gone.
+
+### Sizing `older_than`
+
+A cleanup window older than the whole backlog marks nothing. The backlog settles
+at roughly:
+
+```
+steady-state unread  ≈  window_days × articles_per_day
+```
+
+So a 7-day window against feeds producing ~570 articles/day parks the backlog at
+around 4000 permanently, no matter how often you sweep. If a sweep reports
+`marked: 0`, the window is the first thing to check.
+
+**Never omit `older_than`** unless the user has actually asked to empty the
+folder. Without it the entire folder is marked read, permanently, and the `scope`
+field says `(ENTIRE FOLDER)` so it is at least visible in the transcript.
 
 The second form can mark thousands of articles from one call, which is why it
 sits behind its own switch. Omitting `older_than` marks the entire folder read.

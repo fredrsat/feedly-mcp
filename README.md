@@ -231,6 +231,40 @@ Full tool reference: **[docs/tools.md](docs/tools.md)**
 
 ---
 
+## Limits worth knowing before you build on this
+
+These come from running it against a real, busy account rather than from theory.
+
+**Volume beats your time window.** On a folder producing ~42 articles an hour,
+asking for 24 hours with a limit of 320 actually covers under eight — `limit`
+runs out first. Responses report `covered_hours` alongside `window_hours` so the
+gap is visible, but raising the limit is usually the wrong fix: it costs more
+quota and more context to move the blind spot slightly. Narrow the folder.
+
+**Scope works on folders, not feeds.** If one noisy source and one excellent
+source sit in the same folder, no configuration here separates them — on the
+account this was tested against, a single feed produced 140 of 320 articles and
+none of the useful stories, while a feed with 2 articles produced most of them.
+The fix was unsubscribing in Feedly. Practical order: drop dead-weight feeds
+first, then set scope. The other way round throws away good sources to escape
+bad ones.
+
+**Counts that report what a write did deserve suspicion.** Feedly returns no
+count for folder-level marking, so `mark_read` measures unread totals before and
+after. That is close, not exact — Feedly's own counts lag a moment. For anything
+that matters, check `unread_counts` yourself.
+
+**A cleanup window older than your backlog marks nothing.** Unread settles at
+roughly `window_days × articles_per_day`. A 7-day `older_than` against ~570
+articles a day holds the backlog near 4000 forever, however often you sweep.
+
+**Budget from the response, not from a plan.** Every result carries
+`calls_left_today` and `calls_left_session`. Read them and adapt rather than
+deciding a call count up front — the daily figure is account-wide, so your own
+browsing moves it underneath you.
+
+---
+
 ## Your API quota — please read this
 
 **Your daily API quota is small — smaller than Feedly's documentation suggests.**

@@ -57,7 +57,10 @@ export function registerMarkRead(server: McpServer, ctx: Context): void {
           .optional()
           .describe(
             'Only with `folder`: a duration like "7d", or a unix-ms timestamp. ' +
-              "Omit to mark the entire folder read regardless of age.",
+              "Omitting it marks the ENTIRE folder read regardless of age — always " +
+              "pass this unless the user has explicitly asked to empty the folder. " +
+              "Size it against how fast the feeds arrive: a window older than the " +
+              "whole backlog marks nothing, which is why a sweep can report zero.",
           ),
       },
       annotations: {
@@ -106,6 +109,7 @@ export function registerMarkRead(server: McpServer, ctx: Context): void {
         const { index } = await ctx.folders();
         const folder = resolveFolder(args.folder!, index, ctx.scope);
         const asOf = resolveOlderThan(args.older_than);
+        const unreadBefore = folder.unread;
 
         await ctx.client.markRead({
           action: "markAsRead",
@@ -116,17 +120,42 @@ export function registerMarkRead(server: McpServer, ctx: Context): void {
         ctx.client.invalidateAfterWrite();
         ctx.invalidateFolders();
 
+        // Feedly returns no count for a category-level mark. Reporting the
+        // before-count as if it were the result made a sweep that touched
+        // nothing read like a five-figure success, so measure the difference
+        // instead. Worth one extra call on a permanent operation.
+        let unreadAfter: number | null = null;
+        try {
+          const after = await ctx.client.unreadCounts(0);
+          unreadAfter =
+            after.value.unreadcounts?.find((r) => r.id === folder.id)?.count ?? null;
+        } catch {
+          // Out of budget, or Feedly declined. The write already happened; say
+          // we could not measure rather than guessing.
+        }
+
+        const marked = unreadAfter === null ? null : Math.max(0, unreadBefore - unreadAfter);
+
         return {
-          // Feedly does not report how many entries a category-level mark hit,
-          // so report the folder's last known unread count rather than invent one.
-          marked_approximately: folder.unread,
+          marked,
+          unread_before: unreadBefore,
+          unread_after: unreadAfter,
           scope: `folder:${folder.label}${
-            args.older_than ? ` older than ${args.older_than}` : " (entire folder)"
+            args.older_than ? ` older than ${args.older_than}` : " (ENTIRE FOLDER)"
           }`,
           permanent: true,
           note:
-            "Feedly does not return a count for folder-level marking. The figure is " +
-            "the folder's unread count before the call.",
+            marked === null
+              ? "Feedly returns no count for folder-level marking, and the follow-up " +
+                "count could not be read, so how many were affected is unknown. Call " +
+                "unread_counts to check."
+              : "Feedly returns no count for folder-level marking. `marked` is the " +
+                "difference between unread totals read before and immediately after. " +
+                "Feedly's counts can lag a moment, so treat it as close, not exact. " +
+                (marked === 0
+                  ? "Zero means the window matched nothing — everything in this folder " +
+                    "is newer than older_than."
+                  : ""),
           meta: buildMeta(ctx, { fetchedAt: Date.now(), fromCache: false }),
         };
       }),
