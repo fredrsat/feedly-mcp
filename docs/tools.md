@@ -1,5 +1,9 @@
 # Tool reference
 
+> **Design document.** These tools are not implemented yet. Return shapes below
+> are the specification, not observed output. See the [README](../README.md) for
+> status.
+
 Six tools. You will rarely call them by name — ask Claude in plain language and
 it picks. This document is for understanding what happens when it does, and what
 each request costs you.

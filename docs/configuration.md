@@ -1,5 +1,8 @@
 # Configuration
 
+> **Design document.** The server does not exist yet — no setting here does
+> anything today. See the [README](../README.md) for status.
+
 Every setting can be left alone. The defaults are chosen to be safe and quiet:
 read-only, conservative with your API quota, no surprises.
 

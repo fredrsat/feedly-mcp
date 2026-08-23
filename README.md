@@ -3,9 +3,15 @@
 Read your Feedly subscriptions from Claude. Ask *"what's new in my AI feeds?"* and
 get an answer, without opening a browser.
 
-> **Status: in development. Not published yet.**
-> This README describes the intended install experience. The npm package and the
-> `.mcpb` bundle do not exist yet. Remove this banner at first release.
+> ## ⚠️ Nothing here is installable yet
+>
+> This repository currently contains **design documents only — no code.**
+>
+> There is no npm package, no `.mcpb` bundle, and no releases. Every command
+> below will fail today. They describe the intended experience, written first so
+> the install flow could be designed before it was built.
+>
+> Watch the repo if you want to know when that changes.
 
 ---
 
@@ -73,12 +79,16 @@ Everything runs on your own machine.
 
 ## Step 2 — Install
 
+> **Not available yet.** All three paths below depend on a published artifact —
+> an npm package or an `.mcpb` bundle — and neither exists. This section is the
+> plan, not instructions you can follow today.
+
 Pick **one** of the three paths below.
 
 ### Option A — Claude Desktop, one-click (easiest)
 
-1. Download the latest `feedly-mcp.mcpb` from the
-   [Releases page](https://github.com/fredrsat/feedly-mcp/releases).
+1. Download the latest `feedly-mcp.mcpb` from the repository's Releases page.
+   *(No releases published yet.)*
 2. Open Claude Desktop → **Settings** → **Extensions**.
 3. Drag the `.mcpb` file into the window.
 4. A settings form appears. Paste your token into **Feedly API token** and click
