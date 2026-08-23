@@ -166,7 +166,8 @@ A healthy result looks like this:
   …
 
   API calls used today: 4 of 50   (resets in 11h34m)
-  This server's budget: 40/day, 10/session — 4 used just now
+  Configured ceiling:   40/day account-wide, 10/session
+  Through this server:  4 today, 4 in this run
 
 ✓ Everything checks out.
 ```
@@ -248,7 +249,11 @@ So this tool defends the budget on your behalf:
 - Repeated identical requests within 15 minutes are served from cache.
 - One call fetches a whole folder — never one call per feed.
 - Hard ceilings at 10 calls per session and 40 per day, leaving headroom for you.
-- Every response reports how much quota is left. Below 10, you get a warning.
+  The daily one is measured account-wide, so browsing Feedly yourself counts
+  against it — that is deliberate, so an agent cannot lock you out of your own
+  reader.
+- Every response reports how much quota is left and how stale the data is. Below
+  10 calls remaining, you get a warning.
 
 Check your own ceiling with `doctor` — it prints the limit your account actually
 reports. If it says something higher than 50, you can safely raise the budget in

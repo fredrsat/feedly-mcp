@@ -210,9 +210,22 @@ export class FeedlyClient {
     return this.request<unknown>("/v3/markers", { method: "POST", body });
   }
 
-  /** Invalidate everything that a write could have made stale (spec §8). */
-  invalidateAfterWrite(): void {
-    this.cache.delete("markers-counts");
+  /**
+   * Invalidate everything a write could have made stale (spec §8).
+   *
+   * Not just the counts: a cached `unreadOnly` article query still contains the
+   * articles that were just marked read, and would keep returning them for the
+   * rest of the article TTL.
+   */
+  invalidateAfterWrite(): number {
+    return this.cache.deleteMatching(
+      (key) => key === "markers-counts" || key.startsWith("stream:"),
+    );
+  }
+
+  /** Drop cache entries older than the longest TTL in use. */
+  pruneCache(maxAgeMs: number): number {
+    return this.cache.prune(maxAgeMs);
   }
 }
 

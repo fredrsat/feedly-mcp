@@ -67,8 +67,13 @@ export class Budget {
     }
     const used = this.snapshot().used;
     if (used >= this.dailyLimit) {
-      throw errors.budgetExhausted("daily", used, this.dailyLimit);
+      throw errors.budgetExhausted("daily", used, this.dailyLimit, this.state.localCount);
     }
+  }
+
+  /** How many of today's calls this server is responsible for. */
+  get callsByThisServerToday(): number {
+    return this.state.localCount;
   }
 
   /** Record a call we actually made, folding in Feedly's own accounting. */
@@ -135,8 +140,9 @@ export class Budget {
       }. Draining the quota also breaks Feedly in your browser until it resets.`;
     }
     if (budgetLeft <= this.warnBelow) {
-      return `Only ${budgetLeft} calls left in this server's daily budget of ${this.dailyLimit}. ` +
-        `This is feedly-mcp's own ceiling — raise budget.daily_calls if you want more.`;
+      return `Only ${budgetLeft} calls left under the daily ceiling of ${this.dailyLimit} ` +
+        `(${snap.used} used today account-wide, ${this.state.localCount} through this ` +
+        `server). Raise budget.daily_calls if you want more.`;
     }
     if (this.sessionRemaining <= Math.min(3, this.sessionLimit)) {
       return `Only ${this.sessionRemaining} calls left in this session's budget of ${this.sessionLimit}.`;

@@ -89,6 +89,42 @@ describe("Cache", () => {
     assert.equal(existsSync(c.location), false);
   });
 
+  test("deleteMatching removes by logical key, not by filename", () => {
+    const c = new Cache(dir, "t");
+    c.set("markers-counts", 1);
+    c.set("stream:{a}", 2);
+    c.set("stream:{b}", 3);
+    c.set("subscriptions", 4);
+
+    const removed = c.deleteMatching((k) => k === "markers-counts" || k.startsWith("stream:"));
+
+    assert.equal(removed, 3);
+    assert.equal(c.get("markers-counts", 60_000), undefined);
+    assert.equal(c.get("stream:{a}", 60_000), undefined);
+    assert.equal(c.get("stream:{b}", 60_000), undefined);
+    assert.equal(
+      c.get("subscriptions", 60_000).value,
+      4,
+      "metadata must survive — a write does not change the folder list",
+    );
+  });
+
+  test("deleteMatching on an empty namespace is a no-op", () => {
+    assert.equal(new Cache(dir, "never-used").deleteMatching(() => true), 0);
+  });
+
+  test("prune drops entries older than the cutoff and keeps fresh ones", async () => {
+    const c = new Cache(dir, "t");
+    c.set("old", 1);
+    await new Promise((r) => setTimeout(r, 25));
+    c.set("new", 2);
+
+    c.prune(20);
+
+    assert.equal(c.get("old", 600_000), undefined);
+    assert.equal(c.get("new", 600_000).value, 2);
+  });
+
   test("corrupt cache files are treated as a miss", () => {
     const c = new Cache(dir, "t");
     c.set("k", "v");
@@ -155,15 +191,27 @@ describe("Budget", () => {
     );
   });
 
-  test("the daily error distinguishes itself from Feedly's own 429", () => {
+  test("the daily error says the count is account-wide, not ours alone", () => {
     const b = new Budget(new Cache(dir, "t"), 5, 100, 1);
+    // Feedly says 5 used, but this server only made 1 of them — the rest came
+    // from the browser. Claiming we spent the budget would be wrong.
     b.record(headers({ "x-ratelimit-count": "5", "x-ratelimit-limit": "50" }));
     try {
       b.assertCanSpend();
       assert.fail("should have thrown");
     } catch (err) {
-      assert.match(err.message, /own ceiling|still have real quota/);
+      assert.match(err.message, /account-wide/);
+      assert.match(err.message, /1 of them through this server/);
+      assert.equal(err.details.byThisServer, 1);
     }
+  });
+
+  test("tracks how much of the account-wide total is ours", () => {
+    const b = new Budget(new Cache(dir, "t"), 40, 10, 10);
+    b.record(headers({ "x-ratelimit-count": "30" }));
+    b.record(headers({ "x-ratelimit-count": "31" }));
+    assert.equal(b.snapshot().used, 31, "account-wide");
+    assert.equal(b.callsByThisServerToday, 2, "ours");
   });
 
   test("daily state persists across instances", () => {
@@ -185,10 +233,12 @@ describe("Budget", () => {
     assert.match(b.warning(), /5 Feedly API calls left/);
   });
 
-  test("warns about the local budget separately", () => {
+  test("warns about the configured ceiling separately from Feedly's", () => {
     const b = new Budget(new Cache(dir, "t"), 20, 100, 10);
     b.record(headers({ "x-ratelimit-count": "15", "x-ratelimit-limit": "500" }));
-    assert.match(b.warning(), /daily budget/);
+    const w = b.warning();
+    assert.match(w, /daily ceiling of 20/);
+    assert.match(w, /account-wide/);
   });
 
   test("says nothing when there is plenty left", () => {

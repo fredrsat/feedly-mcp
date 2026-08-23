@@ -321,6 +321,17 @@ lar agenten si «per kl. 14:03» i stedet for å late som alt er ferskt — og
 `from_cache` er det som gjør `fetched_at` tolkbart, siden et cachet svar kan være
 `articles_ttl` gammelt uten at noe annet i svaret røper det.
 
+**Begge feltene skal være pessimistiske.** Flere verktøy bygger svaret sitt av
+mer enn én forespørsel, som kan være ferske eller cachet uavhengig av hverandre.
+`fetched_at` skal derfor rapportere den **eldste** kilden, og `from_cache` skal
+være sann når **minst én** kom fra cache. Bruker du «alle» i stedet for «minst
+én», får du `from_cache: false` ved siden av et to timer gammelt tidsstempel — og
+da er feltene verre enn ubrukelige, for de motsier hverandre.
+
+Fella er ikke teoretisk: den første implementasjonen hardkodet
+`fetched_at: Date.now(), from_cache: false` i `list_folders` og gjorde nøyaktig
+det denne seksjonen finnes for å hindre.
+
 ### Feiltaksonomi
 
 | Situasjon | Svar |
@@ -371,6 +382,15 @@ om en felles pott. Men det betyr også at en overivrig agent tømmer *brukerens*
 kvote, og da er Feedly utilgjengelig i nettleseren deres også resten av døgnet.
 Budsjettet i §4.2 er brukerens vern mot sin egen agent.
 
+**`daily_calls` måles kontoomfattende, ikke per server.** Den sjekkes mot
+`X-Ratelimit-Count`, som teller alle klienter på kontoen — også nettleseren. Har
+brukeren brukt 38 kall selv i dag, nekter serveren på 40 uten å ha gjort ett
+eneste. Det er tilsiktet: poenget er å etterlate en fungerende Feedly.
+
+Men feilmeldingen må da si begge tall. «This server's daily budget is spent»
+ville vært direkte usant i det tilfellet, og verre: den ville sendt brukeren for
+å heve et tak som ikke var problemet.
+
 Krav:
 
 - **Cache `/v3/categories` og `/v3/subscriptions` på disk**, ikke bare i minnet.
@@ -406,7 +426,10 @@ krever e-post til support. Derfor:
   angremulighet, utført av en agent. Verdien står ikke i forhold. La folk si opp
   abonnementer i Feedly.
 - Skriveoperasjoner går alltid live til Feedly og skal invalidere berørte
-  cache-oppføringer.
+  cache-oppføringer. **Berørte er mer enn tellerne:** et cachet `unreadOnly`-svar
+  inneholder fortsatt artiklene som nettopp ble markert lest, og ville servert
+  dem tilbake resten av `articles_ttl`. Både `markers/counts` og alle
+  `stream:`-oppføringer må ryddes.
 
 ---
 

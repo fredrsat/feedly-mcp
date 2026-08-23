@@ -45,10 +45,12 @@ async function call(name, args = {}) {
   } catch {
     parsed = text;
   }
-  const left = parsed?.meta?.calls_left_today;
+  const m = parsed?.meta;
+  const age = m?.fetched_at ? `${Math.round((Date.now() - m.fetched_at) / 1000)}s old` : "";
   console.log(
     `── ${name}(${JSON.stringify(args)})${res.isError ? "  [isError]" : ""}` +
-      (left !== undefined ? `   ${left} calls left today` : ""),
+      (m?.calls_left_today !== undefined ? `   ${m.calls_left_today} left today` : "") +
+      (m ? `   cache=${m.from_cache} data=${age}` : ""),
   );
   return parsed;
 }

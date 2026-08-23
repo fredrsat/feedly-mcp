@@ -28,7 +28,7 @@ export function registerListFeeds(server: McpServer, ctx: Context): void {
     },
     async (args) =>
       toolResult(async () => {
-        const [index, subscriptions, counts] = await Promise.all([
+        const [{ index }, subscriptions, counts] = await Promise.all([
           ctx.folders(),
           ctx.client.subscriptions(ctx.config.cache.metadataTtlMs.value),
           ctx.client.unreadCounts(ctx.config.cache.articlesTtlMs.value).catch(() => undefined),

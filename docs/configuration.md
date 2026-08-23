@@ -147,7 +147,7 @@ for why this matters.
 
 | Setting | Type | Default | Notes |
 |---|---|---|---|
-| `daily_calls` | integer | `40` | Ceiling on calls per day, out of the 50 a developer token appears to get. The remainder is left for your own browsing. |
+| `daily_calls` | integer | `40` | Ceiling on the account's calls per day, out of the 50 a developer token appears to get. See the note below — this is not a count of what *this server* spent. |
 | `session_calls` | integer | `10` | Ceiling per server session, so one runaway conversation cannot spend the whole day. |
 | `warn_below` | integer | `10` | When fewer calls than this remain, every response carries a visible warning. |
 
@@ -155,6 +155,14 @@ for why this matters.
 > Pro Plus account reports `X-Ratelimit-Limit: 50` per day — not the 250/500 the
 > documentation describes. The defaults above are built for 50. Check your own
 > ceiling with `doctor`, and raise these only if it reports something higher.
+
+> **`daily_calls` is measured account-wide.** It is checked against Feedly's own
+> `X-Ratelimit-Count`, which counts every client on the account — including
+> Feedly in your browser. So if you have already spent 38 calls reading Feedly
+> this morning, this server will decline at 40 even though it has made none
+> itself. That is the intended protection, not a bug: the point is to leave you
+> a working Feedly. Error messages state both figures, so you can tell whose
+> spending stopped you.
 
 Raising `daily_calls` above your actual limit does nothing useful — you will just
 hit Feedly's 429 instead of a clean local error.

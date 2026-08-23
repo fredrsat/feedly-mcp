@@ -30,8 +30,16 @@ Every tool returns a `meta` object alongside its result:
 ```
 
 `calls_left_today` comes from Feedly's own `X-Ratelimit-Count` header and is
-absent until the first response of the day has been seen. `calls_left_session`
-is this server's own per-conversation ceiling.
+absent until the first response of the day has been seen. That header is
+**account-wide**: reading Feedly in a browser spends the same quota.
+`calls_left_session` is this server's own per-conversation ceiling.
+
+`fetched_at` and `from_cache` are both deliberately pessimistic. Several tools
+build their answer from more than one request, each of which may be fresh or
+cached independently — so `fetched_at` reports the **oldest** contributing
+request, and `from_cache` is true when **any** of them came from cache. A result
+marked `from_cache: true` with a two-hour-old timestamp is telling you something
+real: parts of that answer are that old.
 
 `fetched_at` is when the data was actually retrieved from Feedly, which is not
 the same as now. When `from_cache` is `true`, it may be up to ten minutes old —
@@ -205,9 +213,15 @@ How much is waiting, without fetching any articles.
 `global.all` row. The per-folder figures are for orientation and will not sum to
 it.
 
-`total_is_account_wide` is `true` when that row was available. When a
-[scope](configuration.md#scope) is configured, an extra `note` says so: the total
-still covers the whole account, while `by_folder` is limited to folders in scope.
+If Feedly does not return that row, **`total` is `null`** and a `note` explains
+why. It is not estimated from the per-folder numbers: summing them double-counts
+every feed that sits in more than one folder, and the largest folder is not a
+total either. A plausible-looking wrong number is worse than none.
+
+`total_is_account_wide` tells you which case you got. When a
+[scope](configuration.md#scope) is configured, the `note` also says that the
+total still covers the whole account while `by_folder` is limited to folders in
+scope.
 
 **API cost:** 1 call. This is the cheapest useful thing you can ask — a single
 request covers your whole account.

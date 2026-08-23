@@ -91,17 +91,33 @@ export const errors = {
       { ...(resetSeconds !== undefined && { resetSeconds }), ...(limit !== undefined && { limit }) },
     ),
 
-  budgetExhausted: (which: "daily" | "session", used: number, limit: number) =>
+  /**
+   * `used` is the account-wide figure from Feedly's own header, which counts
+   * every client — including Feedly in the user's browser. `byThisServer` is how
+   * much of it we are responsible for. Saying only the first would wrongly imply
+   * this server spent it all.
+   */
+  budgetExhausted: (
+    which: "daily" | "session",
+    used: number,
+    limit: number,
+    byThisServer?: number,
+  ) =>
     new FeedlyMcpError(
       "budget_exhausted",
       which === "daily"
-        ? `This server's daily budget is spent (${used}/${limit} calls). This is ` +
-          `feedly-mcp's own ceiling, not Feedly's — you likely still have real quota ` +
-          `left. Raise budget.daily_calls if you meant to spend more.`
+        ? `The daily ceiling of ${limit} calls is reached: the account has used ` +
+          `${used} today${
+            byThisServer !== undefined
+              ? `, ${byThisServer} of them through this server`
+              : ""
+          }. The count is account-wide, so reading Feedly in a browser spends it ` +
+          `too. This ceiling is feedly-mcp's own — raise budget.daily_calls to go ` +
+          `further, up to whatever Feedly actually allows.`
         : `This session's call budget is spent (${used}/${limit} calls). This guards ` +
           `against one conversation draining the whole day. Start a new session, or ` +
           `raise budget.session_calls.`,
-      { used, limit },
+      { used, limit, ...(byThisServer !== undefined && { byThisServer }) },
     ),
 
   outOfScope: (folder: string) =>

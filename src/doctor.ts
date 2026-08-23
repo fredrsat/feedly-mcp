@@ -158,8 +158,14 @@ export async function runDoctor(opts: DoctorOptions = {}): Promise<number> {
     );
     out(
       dim(
-        `  This server's budget: ${config.budget.dailyCalls.value}/day, ` +
-          `${config.budget.sessionCalls.value}/session — ${budget.callsThisSession} used just now`,
+        `  Configured ceiling:   ${config.budget.dailyCalls.value}/day account-wide, ` +
+          `${config.budget.sessionCalls.value}/session`,
+      ),
+    );
+    out(
+      dim(
+        `  Through this server:  ${budget.callsByThisServerToday} today, ` +
+          `${budget.callsThisSession} in this run`,
       ),
     );
 

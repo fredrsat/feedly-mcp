@@ -38,14 +38,14 @@ function registerListFolders(server: McpServer, ctx: Context): void {
     },
     async () =>
       toolResult(async () => {
-        const index = await ctx.folders();
+        const { index, fetchedAt, fromCache } = await ctx.folders();
         return {
           folders: index.visible.map((f) => ({
             id: f.id,
             label: f.label,
             unread: f.unread,
           })),
-          meta: buildMeta(ctx, { fetchedAt: Date.now(), fromCache: false }),
+          meta: buildMeta(ctx, { fetchedAt, fromCache }),
         };
       }),
   );
@@ -65,7 +65,7 @@ function registerUnreadCounts(server: McpServer, ctx: Context): void {
     },
     async () =>
       toolResult(async () => {
-        const [index, counts] = await Promise.all([
+        const [{ index }, counts] = await Promise.all([
           ctx.folders(),
           ctx.client.unreadCounts(ctx.config.cache.articlesTtlMs.value),
         ]);
@@ -82,14 +82,28 @@ function registerUnreadCounts(server: McpServer, ctx: Context): void {
         const scoped =
           ctx.scope.includeFolders.length > 0 || ctx.scope.excludeFolders.length > 0;
 
-        return {
-          total: global?.count ?? Math.max(0, ...byFolder.map((f) => f.unread)),
-          total_is_account_wide: global !== undefined,
-          ...(scoped && {
-            note:
-              "The total covers the whole account. Per-folder figures are limited to " +
+        const notes: string[] = [];
+        if (global === undefined) {
+          // Summing folders would double-count every feed that sits in more than
+          // one, and the largest folder is not a total either. Say so instead of
+          // returning a plausible-looking wrong number.
+          notes.push(
+            "Feedly did not return its account-wide row, so there is no trustworthy " +
+              "total. The per-folder figures cannot be added up — a feed in several " +
+              "folders is counted in each.",
+          );
+        }
+        if (scoped) {
+          notes.push(
+            "The total covers the whole account. Per-folder figures are limited to " +
               "folders inside the configured scope.",
-          }),
+          );
+        }
+
+        return {
+          total: global?.count ?? null,
+          total_is_account_wide: global !== undefined,
+          ...(notes.length > 0 && { note: notes.join(" ") }),
           by_folder: byFolder,
           meta: buildMeta(ctx, {
             fetchedAt: counts.fetchedAt,

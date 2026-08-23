@@ -103,7 +103,7 @@ export function registerMarkRead(server: McpServer, ctx: Context): void {
 
         if (!writes.bulkMarkRead.value) throw errors.writesDisabled(true);
 
-        const index = await ctx.folders();
+        const { index } = await ctx.folders();
         const folder = resolveFolder(args.folder!, index, ctx.scope);
         const asOf = resolveOlderThan(args.older_than);
 

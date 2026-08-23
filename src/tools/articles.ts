@@ -103,7 +103,7 @@ export function registerGetArticles(server: McpServer, ctx: Context): void {
         const requestedHours = args.hours ?? defaults.hours.value;
         const { hours, clamped } = clampHours(requestedHours);
 
-        const index = await ctx.folders();
+        const { index } = await ctx.folders();
         const choice = await chooseStream(ctx, index, args.folder);
 
         const newerThan = Date.now() - hours * 3_600_000;
