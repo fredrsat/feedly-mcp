@@ -20,6 +20,8 @@ export interface Context {
   scope: ScopeRules;
   /** Folder index, fetched on first use and reused after that. */
   folders(): Promise<FolderIndex>;
+  /** The account's own ID, needed to build stream IDs. Never hardcoded (spec §5). */
+  accountId(): Promise<string>;
   /** Force the next folders() call to refetch — used after a write. */
   invalidateFolders(): void;
 }
@@ -43,6 +45,7 @@ export function createContext(configPath?: string): Context {
   };
 
   let pending: Promise<FolderIndex> | undefined;
+  let pendingAccount: Promise<string> | undefined;
 
   const ctx: Context = {
     config,
@@ -63,6 +66,16 @@ export function createContext(configPath?: string): Context {
         throw err;
       });
       return pending;
+    },
+    accountId() {
+      pendingAccount ??= client
+        .profile(config.cache.metadataTtlMs.value)
+        .then((p) => p.value.id)
+        .catch((err: unknown) => {
+          pendingAccount = undefined;
+          throw err;
+        });
+      return pendingAccount;
     },
     invalidateFolders() {
       pending = undefined;

@@ -3,15 +3,22 @@
 Read your Feedly subscriptions from Claude. Ask *"what's new in my AI feeds?"* and
 get an answer, without opening a browser.
 
-> ## ⚠️ Nothing here is installable yet
+> ## ⚠️ Not published yet
 >
-> This repository currently contains **design documents only — no code.**
+> The server works — all six tools have been exercised against a live Feedly
+> account — but it is **not on npm and there are no releases**, so the `npx` and
+> `.mcpb` instructions below will not work yet.
 >
-> There is no npm package, no `.mcpb` bundle, and no releases. Every command
-> below will fail today. They describe the intended experience, written first so
-> the install flow could be designed before it was built.
+> To try it today, clone the repo and build from source:
 >
-> Watch the repo if you want to know when that changes.
+> ```bash
+> git clone https://github.com/fredrsat/feedly-mcp && cd feedly-mcp
+> npm install && npm run build
+> FEEDLY_TOKEN=your-token node dist/cli.js doctor
+> ```
+>
+> Then point your MCP client at `node /absolute/path/to/dist/cli.js` instead of
+> `npx -y feedly-mcp`.
 
 ---
 

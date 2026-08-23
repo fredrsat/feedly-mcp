@@ -22,11 +22,16 @@ Every tool returns a `meta` object alongside its result:
 ```json
 {
   "calls_used": 12,
-  "calls_left_today": 188,
+  "calls_left_today": 38,
+  "calls_left_session": 7,
   "fetched_at": 1755800000000,
   "from_cache": false
 }
 ```
+
+`calls_left_today` comes from Feedly's own `X-Ratelimit-Count` header and is
+absent until the first response of the day has been seen. `calls_left_session`
+is this server's own per-conversation ceiling.
 
 `fetched_at` is when the data was actually retrieved from Feedly, which is not
 the same as now. When `from_cache` is `true`, it may be up to ten minutes old —
@@ -135,12 +140,21 @@ actually read.
   ],
   "count": 43,
   "truncated": false,
+  "folder": "AI - Research",
+  "window_hours": 72,
   "meta": { … }
 }
 ```
 
-`truncated` is `true` when more articles matched than `limit` allowed. Ask for a
-narrower time window rather than raising `limit` — it costs less and reads better.
+`truncated` is `true` when more matched than `limit` allowed, when the stream had
+further pages, or when the budget stopped pagination early. Ask for a narrower
+time window rather than raising `limit` — it costs less and reads better.
+
+Two fields appear only when they apply:
+
+- `note` — when `hours` was clamped to Feedly's 31-day ceiling.
+- `stopped_early` — when the call budget ran out partway through pagination. You
+  get the articles retrieved so far rather than an error.
 
 ### What is deliberately left out
 
@@ -177,17 +191,23 @@ How much is waiting, without fetching any articles.
 
 ```json
 {
-  "total": 214,
+  "total": 4425,
+  "total_is_account_wide": true,
   "by_folder": [
-    { "label": "AI", "unread": 214 },
-    { "label": "AI - Research", "unread": 31 }
+    { "label": "AI", "unread": 4317 },
+    { "label": "AI - Research", "unread": 68 }
   ],
   "meta": { … }
 }
 ```
 
-`total` is deduplicated and is the number to trust. The per-folder figures are
-for orientation and will not sum to it.
+`total` is deduplicated and is the number to trust — it comes from Feedly's own
+`global.all` row. The per-folder figures are for orientation and will not sum to
+it.
+
+`total_is_account_wide` is `true` when that row was available. When a
+[scope](configuration.md#scope) is configured, an extra `note` says so: the total
+still covers the whole account, while `by_folder` is limited to folders in scope.
 
 **API cost:** 1 call. This is the cheapest useful thing you can ask — a single
 request covers your whole account.
@@ -196,8 +216,13 @@ request covers your whole account.
 
 ## `search_feeds`
 
-Find sources to subscribe to. Searches Feedly's catalogue, not your own
-subscriptions.
+Find sources to subscribe to. Searches Feedly's catalogue of publications — not
+your own subscriptions, and **not article text**.
+
+Query with a topic or a publication name (`"machine learning"`,
+`"MIT Technology Review"`). A phrase describing article content
+(`"local llm inference"`) returns an empty list, verified against the live API.
+When nothing matches, the response includes a `hint` saying so.
 
 | Parameter | Type | Default | |
 |---|---|---|---|
@@ -240,6 +265,12 @@ their support.
 Requires [`writes.enabled = true`](configuration.md#writes). Folder-level marking
 requires `writes.bulk_mark_read = true` as well.
 
+> **Untested against the live API.** Every other tool here has been exercised
+> against a real account. This one has not, because there is no way to undo a
+> successful call and no safe article to sacrifice. Its refusal paths are tested;
+> its success path is code review only. Treat the first real use as a test, and
+> start with a single `entry_ids` value.
+
 Call it one of two ways:
 
 **By article** — requires `writes.enabled`:
@@ -257,8 +288,23 @@ Call it one of two ways:
 
 **Returns:**
 
+By article:
+
 ```json
-{ "marked": 43, "scope": "folder:AI - Research older than 7d", "meta": { … } }
+{ "marked": 12, "scope": "12 articles by ID", "permanent": true, "meta": { … } }
+```
+
+By folder — Feedly returns no count for a category-level mark, so the figure is
+the folder's unread count taken *before* the call, and is named accordingly:
+
+```json
+{
+  "marked_approximately": 68,
+  "scope": "folder:AI - Research older than 7d",
+  "permanent": true,
+  "note": "Feedly does not return a count for folder-level marking. …",
+  "meta": { … }
+}
 ```
 
 The second form can mark thousands of articles from one call, which is why it

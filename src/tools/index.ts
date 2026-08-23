@@ -10,10 +10,17 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Context } from "../context.js";
 import { buildMeta, toolResult } from "../server.js";
 import { isVisible } from "../folders.js";
+import { registerGetArticles } from "./articles.js";
+import { registerListFeeds, registerSearchFeeds } from "./feeds.js";
+import { registerMarkRead } from "./writes.js";
 
 export function registerTools(server: McpServer, ctx: Context): void {
   registerListFolders(server, ctx);
+  registerListFeeds(server, ctx);
+  registerGetArticles(server, ctx);
   registerUnreadCounts(server, ctx);
+  registerSearchFeeds(server, ctx);
+  registerMarkRead(server, ctx);
 }
 
 function registerListFolders(server: McpServer, ctx: Context): void {
