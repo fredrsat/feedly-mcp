@@ -21,7 +21,7 @@
     "doctor": "npm run build --silent && node dist/cli.js doctor",
     "start": "npm run build --silent && node dist/cli.js",
     "typecheck": "tsc --noEmit",
-    "test": "node --test dist/**/*.test.js"
+    "test": "npm run build --silent && node --test \"test/*.test.mjs\""
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
