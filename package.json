@@ -1,0 +1,35 @@
+{
+  "name": "feedly-mcp",
+  "version": "0.1.0",
+  "description": "MCP connector for reading your own Feedly subscriptions from Claude. Local stdio server, your token stays on your machine.",
+  "license": "MIT",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "feedly-mcp": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "docs"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch",
+    "doctor": "npm run build --silent && node dist/cli.js doctor",
+    "start": "npm run build --silent && node dist/cli.js",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test dist/**/*.test.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "smol-toml": "^1.8.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0"
+  }
+}
