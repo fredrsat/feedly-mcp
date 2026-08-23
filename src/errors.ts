@@ -128,15 +128,27 @@ export const errors = {
         `allow every folder.`,
     ),
 
+  /**
+   * Naming only the TOML key sent a user hunting in the wrong file, so spell out
+   * both mechanisms and where each one lives.
+   */
   writesDisabled: (bulk: boolean) =>
     new FeedlyMcpError(
       "writes_disabled",
-      bulk
+      (bulk
         ? `Marking a whole folder read is disabled. It is permanent and can affect ` +
-          `thousands of articles, so it needs both writes.enabled and ` +
-          `writes.bulk_mark_read set to true.`
+          `thousands of articles at once, so it needs BOTH switches on.`
         : `Marking articles read is disabled. Feedly has no undo for this, so it is ` +
-          `off by default. Set writes.enabled = true to allow it.`,
+          `off by default.`) +
+        ` Enable it either in ~/.config/feedly-mcp/config.toml:\n` +
+        `    [writes]\n    enabled = true\n` +
+        (bulk ? `    bulk_mark_read = true\n` : "") +
+        `  ...or as environment variables in your MCP client's "env" block:\n` +
+        `    FEEDLY_MCP_WRITES_ENABLED=true` +
+        (bulk ? `, FEEDLY_MCP_WRITES_BULK_MARK_READ=true` : "") +
+        `\n  A .env file in the repository is NOT read by the server — that file is ` +
+        `only for the development scripts. Run "doctor" to see which values are ` +
+        `actually in effect and where each came from.`,
     ),
 
   folderNotFound: (folder: string, available: string[]) =>
