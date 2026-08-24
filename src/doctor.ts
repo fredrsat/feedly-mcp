@@ -70,6 +70,7 @@ export async function runDoctor(opts: DoctorOptions = {}): Promise<number> {
     config.budget.dailyCalls.value,
     config.budget.sessionCalls.value,
     config.budget.warnBelow.value,
+    config.budget.sessionIdleResetMs.value,
   );
   const client = new FeedlyClient(token, config.feedly.apiBase.value, cache, budget);
 
@@ -233,6 +234,7 @@ function everySetting(config: Config): Array<Resolved<unknown>> {
     config.defaults.fullText,
     config.budget.dailyCalls,
     config.budget.sessionCalls,
+    config.budget.sessionIdleResetMs,
     config.budget.warnBelow,
     config.cache.metadataTtlMs,
     config.cache.articlesTtlMs,

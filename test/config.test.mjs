@@ -80,7 +80,8 @@ describe("loadConfig precedence", () => {
     assert.equal(c.defaults.summaryChars.value, 400);
     assert.equal(c.defaults.fullText.value, false);
     assert.equal(c.budget.dailyCalls.value, 40);
-    assert.equal(c.budget.sessionCalls.value, 10);
+    assert.equal(c.budget.sessionCalls.value, 15);
+    assert.equal(c.budget.sessionIdleResetMs.value, 900_000);
     assert.equal(c.budget.warnBelow.value, 10);
     assert.equal(c.cache.metadataTtlMs.value, 86_400_000);
     assert.equal(c.cache.articlesTtlMs.value, 900_000);

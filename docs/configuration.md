@@ -148,8 +148,23 @@ for why this matters.
 | Setting | Type | Default | Notes |
 |---|---|---|---|
 | `daily_calls` | integer | `40` | Ceiling on the account's calls per day, out of the 50 a developer token appears to get. See the note below — this is not a count of what *this server* spent. |
-| `session_calls` | integer | `10` | Ceiling per server session, so one runaway conversation cannot spend the whole day. |
+| `session_calls` | integer | `15` | Ceiling per burst of activity, so one runaway conversation cannot spend the whole day. |
+| `session_idle_reset` | duration | `"15m"` | Quiet period after which the session counter starts over. |
 | `warn_below` | integer | `10` | When fewer calls than this remain, every response carries a visible warning. |
+
+> **A "session" is a gap, not a conversation.** The server has no way to know
+> when a conversation begins: clients start the process once and keep it alive
+> for as long as the app runs — measured at over 15 hours on a desktop app — and
+> every conversation shares it. So the counter resets after
+> `session_idle_reset` of no calls instead.
+>
+> This matters most for scheduled work. A task firing each morning is hours past
+> the last activity, so it always starts clean. Before this existed, such a run
+> inherited whatever earlier conversations had spent and could never clear it.
+>
+> If you drive several tools in one burst, raise `session_calls` rather than
+> lowering the idle window: a job needing 6–8 calls wants headroom, not a
+> shorter definition of "session".
 
 > **The real limit is lower than Feedly documents.** A developer token on a paid
 > Pro Plus account reports `X-Ratelimit-Limit: 50` per day — not the 250/500 the
@@ -261,9 +276,10 @@ summary_chars = 400
 full_text     = false
 
 [budget]
-daily_calls   = 40
-session_calls = 10
-warn_below    = 10
+daily_calls        = 40
+session_calls      = 15
+session_idle_reset = "15m"
+warn_below         = 10
 
 [cache]
 metadata_ttl = "24h"

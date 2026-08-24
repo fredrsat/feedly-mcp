@@ -138,9 +138,9 @@ describe("Cache", () => {
 describe("Budget", () => {
   test("starts clean and allows spending", () => {
     const b = new Budget(new Cache(dir, "t"), 40, 10, 10);
-    assert.doesNotThrow(() => b.assertCanSpend());
-    assert.equal(b.callsThisSession, 0);
-    assert.equal(b.sessionRemaining, 10);
+    assert.doesNotThrow(() => b.reserve());
+    assert.equal(b.callsThisSession, 1, "reserve claims the slot immediately");
+    assert.equal(b.sessionRemaining, 9);
   });
 
   test("prefers Feedly's own count over local counting", () => {
@@ -175,9 +175,9 @@ describe("Budget", () => {
 
   test("stops at the session ceiling", () => {
     const b = new Budget(new Cache(dir, "t"), 40, 3, 1);
-    for (let i = 0; i < 3; i++) b.record(headers({}));
+    for (let i = 0; i < 3; i++) b.reserve();
     assert.throws(
-      () => b.assertCanSpend(),
+      () => b.reserve(),
       (err) => err.code === "budget_exhausted" && /session/.test(err.message),
     );
   });
@@ -186,7 +186,7 @@ describe("Budget", () => {
     const b = new Budget(new Cache(dir, "t"), 40, 100, 10);
     b.record(headers({ "x-ratelimit-count": "40", "x-ratelimit-limit": "50" }));
     assert.throws(
-      () => b.assertCanSpend(),
+      () => b.reserve(),
       (err) => err.code === "budget_exhausted" && /daily/.test(err.message),
     );
   });
@@ -197,7 +197,7 @@ describe("Budget", () => {
     // from the browser. Claiming we spent the budget would be wrong.
     b.record(headers({ "x-ratelimit-count": "5", "x-ratelimit-limit": "50" }));
     try {
-      b.assertCanSpend();
+      b.reserve();
       assert.fail("should have thrown");
     } catch (err) {
       assert.match(err.message, /account-wide/);
@@ -218,6 +218,67 @@ describe("Budget", () => {
     const cache = new Cache(dir, "t");
     new Budget(cache, 40, 10, 10).record(headers({ "x-ratelimit-count": "22" }));
     assert.equal(new Budget(new Cache(dir, "t"), 40, 10, 10).snapshot().used, 22);
+  });
+
+  test("concurrent reservations cannot exceed the ceiling", () => {
+    // The folder index alone fires three requests at once. A check that did not
+    // also claim the slot let all of them through, so a ceiling of 10 reached 12
+    // and the error then read "12/10" — which looks like a counter that never
+    // resets rather than one that overshot.
+    const b = new Budget(new Cache(dir, "t"), 999, 10, 1);
+    let admitted = 0;
+    for (let round = 0; round < 4; round++) {
+      for (let i = 0; i < 3; i++) {
+        try {
+          b.reserve();
+          admitted += 1;
+        } catch {
+          /* expected once full */
+        }
+      }
+    }
+    assert.equal(admitted, 10);
+    assert.equal(b.callsThisSession, 10, "must land exactly on the ceiling, never past it");
+  });
+
+  test("release gives back a slot for a call that never reached Feedly", () => {
+    const b = new Budget(new Cache(dir, "t"), 999, 2, 1);
+    b.reserve();
+    b.release();
+    assert.equal(b.callsThisSession, 0);
+    assert.doesNotThrow(() => {
+      b.reserve();
+      b.reserve();
+    });
+  });
+
+  test("release cannot drive the counter negative", () => {
+    const b = new Budget(new Cache(dir, "t"), 999, 2, 1);
+    b.release();
+    b.release();
+    assert.equal(b.callsThisSession, 0);
+  });
+
+  test("the session counter restarts after an idle gap", async () => {
+    // A stdio server outlives the conversation that started it — measured at 15
+    // hours. Without this, a scheduled run hours later inherits a spent budget
+    // it can never clear.
+    const b = new Budget(new Cache(dir, "t"), 999, 3, 1, 40);
+    for (let i = 0; i < 3; i++) b.reserve();
+    assert.throws(() => b.reserve(), (err) => err.code === "budget_exhausted");
+
+    await new Promise((r) => setTimeout(r, 60));
+
+    assert.doesNotThrow(() => b.reserve(), "a later run must start clean");
+    assert.equal(b.callsThisSession, 1);
+  });
+
+  test("calls in quick succession stay in the same session", async () => {
+    const b = new Budget(new Cache(dir, "t"), 999, 5, 1, 10_000);
+    b.reserve();
+    await new Promise((r) => setTimeout(r, 20));
+    b.reserve();
+    assert.equal(b.callsThisSession, 2, "a short pause is not a new session");
   });
 
   test("session count does not persist — it is per conversation", () => {

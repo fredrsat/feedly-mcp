@@ -53,6 +53,7 @@ export function createContext(configPath?: string): Context {
     config.budget.dailyCalls.value,
     config.budget.sessionCalls.value,
     config.budget.warnBelow.value,
+    config.budget.sessionIdleResetMs.value,
   );
   const client = new FeedlyClient(token, config.feedly.apiBase.value, cache, budget);
 

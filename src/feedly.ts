@@ -97,7 +97,7 @@ export class FeedlyClient {
       if (hit) return { value: hit.value, fetchedAt: hit.storedAt, fromCache: true };
     }
 
-    this.budget.assertCanSpend();
+    this.budget.reserve();
 
     const url = new URL(path, this.apiBase);
     for (const [k, v] of Object.entries(query ?? {})) {
@@ -117,6 +117,8 @@ export class FeedlyClient {
         signal: AbortSignal.timeout(30_000),
       });
     } catch (err) {
+      // Never reached Feedly, so it spent no quota — give the slot back.
+      this.budget.release();
       const cause = err instanceof Error ? err.message : String(err);
       throw errors.network(redact(cause, this.token));
     }

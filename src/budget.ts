@@ -41,6 +41,7 @@ function utcDay(at = new Date()): string {
 
 export class Budget {
   private sessionCount = 0;
+  private lastCallAt = 0;
   private state: BudgetState;
 
   constructor(
@@ -48,6 +49,17 @@ export class Budget {
     private readonly dailyLimit: number,
     private readonly sessionLimit: number,
     private readonly warnBelow: number,
+    /**
+     * Idle gap after which the session counter starts over.
+     *
+     * A stdio server is not one conversation. Clients start the process once and
+     * keep it alive for as long as the app runs — measured at 15 hours on a
+     * desktop app — so every conversation shares it, and an in-memory counter
+     * only resets when the app quits. Without this, "10 calls per session"
+     * silently means "10 calls until you restart Claude", and a scheduled run
+     * hours later inherits a spent budget it can never clear.
+     */
+    private readonly sessionIdleResetMs: number = 15 * 60_000,
   ) {
     const stored = cache.get<BudgetState>(STATE_KEY, Number.MAX_SAFE_INTEGER);
     const today = utcDay();
@@ -58,10 +70,22 @@ export class Budget {
   }
 
   /**
-   * Throw before spending a call we cannot afford. Called ahead of every request
-   * that is not already served from cache.
+   * Claim a call slot, or throw if it cannot be afforded. Called ahead of every
+   * request not already served from cache.
+   *
+   * This reserves rather than merely checks. Several tools fire concurrent
+   * requests — the folder index alone issues three — and a check that does not
+   * increment lets all of them pass while the counter still reads under the
+   * limit. Measured: a ceiling of 10 reached 12, and the resulting error then
+   * reported "12/10", which reads like a counter that never resets.
    */
-  assertCanSpend(): void {
+  reserve(): void {
+    const now = Date.now();
+    if (this.lastCallAt !== 0 && now - this.lastCallAt >= this.sessionIdleResetMs) {
+      this.sessionCount = 0;
+    }
+    this.lastCallAt = now;
+
     if (this.sessionCount >= this.sessionLimit) {
       throw errors.budgetExhausted("session", this.sessionCount, this.sessionLimit);
     }
@@ -69,6 +93,12 @@ export class Budget {
     if (used >= this.dailyLimit) {
       throw errors.budgetExhausted("daily", used, this.dailyLimit, this.state.localCount);
     }
+    this.sessionCount += 1;
+  }
+
+  /** Give back a slot claimed for a request that never reached Feedly. */
+  release(): void {
+    if (this.sessionCount > 0) this.sessionCount -= 1;
   }
 
   /** How many of today's calls this server is responsible for. */
@@ -76,10 +106,11 @@ export class Budget {
     return this.state.localCount;
   }
 
-  /** Record a call we actually made, folding in Feedly's own accounting. */
+  /**
+   * Fold Feedly's own accounting into the daily figures. The session slot was
+   * already claimed by `reserve()`, so this must not increment it again.
+   */
   record(headers: Headers): void {
-    this.sessionCount += 1;
-
     const today = utcDay();
     if (this.state.localDay !== today) {
       this.state = { localCount: 0, localDay: today };

@@ -44,6 +44,7 @@ export interface Config {
   budget: {
     dailyCalls: Resolved<number>;
     sessionCalls: Resolved<number>;
+    sessionIdleResetMs: Resolved<number>;
     warnBelow: Resolved<number>;
   };
   cache: {
@@ -238,7 +239,14 @@ export function loadConfig(configPathOverride?: string): Config {
     },
     budget: {
       dailyCalls: resolveOne(file, "budget", "daily_calls", "number", 40),
-      sessionCalls: resolveOne(file, "budget", "session_calls", "number", 10),
+      sessionCalls: resolveOne(file, "budget", "session_calls", "number", 15),
+      sessionIdleResetMs: resolveOne(
+        file,
+        "budget",
+        "session_idle_reset",
+        "duration",
+        15 * 60_000,
+      ),
       warnBelow: resolveOne(file, "budget", "warn_below", "number", 10),
     },
     cache: {

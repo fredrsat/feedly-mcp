@@ -164,9 +164,10 @@ summary_chars = 400
 full_text     = false         # slår på summary_full
 
 [budget]
-daily_calls   = 40            # av verifiserte 50 — resten spares til nettleseren
-session_calls = 10
-warn_below    = 10            # advar i verktøysvaret, ikke bare i loggen
+daily_calls        = 40       # av verifiserte 50 — resten spares til nettleseren
+session_calls      = 15
+session_idle_reset = "15m"    # stille periode som nullstiller sesjonstelleren
+warn_below         = 10       # advar i verktøysvaret, ikke bare i loggen
 
 [cache]
 metadata_ttl = "24h"          # kategorier + abonnementer
@@ -409,7 +410,21 @@ Krav:
 - **Les `X-Ratelimit-Count` fra hvert svar** og eksponer det. Under
   `budget.warn_below`: advarsel i verktøysvaret, ikke bare i loggen.
 - **Hardt tak** på `budget.session_calls` og `budget.daily_calls`, uansett hva
-  agenten ber om.
+  agenten ber om. To fallgruver, begge påvist i drift:
+
+  **En stdio-prosess er ikke én samtale.** Klientene starter serveren én gang og
+  holder den i live så lenge appen kjører — målt til over 15 timer — og alle
+  samtaler deler den. En teller i minnet nullstilles da bare når appen avsluttes,
+  så «10 kall per sesjon» betyr i praksis «10 kall til du restarter Claude». En
+  planlagt kjøring arver et oppbrukt budsjett den aldri kan tømme. Bruk et
+  opphold i aktivitet som sesjonsgrense i stedet.
+
+  **Sjekk uten reservasjon holder ikke.** Flere verktøy fyrer samtidige kall —
+  mappeindeksen alene gjør tre. Sjekker du taket uten å telle opp i samme
+  operasjon, passerer alle tre mens telleren fortsatt står under grensen. Målt:
+  tak på 10 nådde 12, og feilmeldingen sa da «12/10», som ser ut som en teller
+  som aldri nullstilles. Reserver plassen, og gi den tilbake hvis kallet aldri
+  nådde fram.
 
 ---
 
