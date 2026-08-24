@@ -10,6 +10,13 @@ import { Budget } from "./budget.js";
 import { Cache } from "./cache.js";
 import { errors, FeedlyMcpError, redact } from "./errors.js";
 
+/**
+ * Catalogue search results change far more slowly than article streams, so they
+ * get their own fixed TTL rather than a configurable one — there is no useful
+ * reason to tune it, and one less knob is one less thing to explain.
+ */
+export const SEARCH_CACHE_TTL_MS = 60 * 60_000;
+
 export interface Profile {
   id: string;
   email?: string;
@@ -204,7 +211,7 @@ export class FeedlyClient {
     return this.request<{ results?: FeedSearchResult[] }>("/v3/search/feeds", {
       query: { query, count },
       cacheKey: `search:${query}:${count}`,
-      ttlMs: 60 * 60_000,
+      ttlMs: SEARCH_CACHE_TTL_MS,
     });
   }
 

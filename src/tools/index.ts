@@ -37,7 +37,7 @@ function registerListFolders(server: McpServer, ctx: Context): void {
       annotations: { readOnlyHint: true, openWorldHint: true },
     },
     async () =>
-      toolResult(async () => {
+      toolResult(ctx, async () => {
         const { index, fetchedAt, fromCache } = await ctx.folders();
         return {
           folders: index.visible.map((f) => ({
@@ -64,7 +64,7 @@ function registerUnreadCounts(server: McpServer, ctx: Context): void {
       annotations: { readOnlyHint: true, openWorldHint: true },
     },
     async () =>
-      toolResult(async () => {
+      toolResult(ctx, async () => {
         const [{ index }, counts] = await Promise.all([
           ctx.folders(),
           ctx.client.unreadCounts(ctx.config.cache.articlesTtlMs.value),

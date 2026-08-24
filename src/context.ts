@@ -11,6 +11,7 @@
 import { Budget } from "./budget.js";
 import { Cache } from "./cache.js";
 import { loadConfig, loadToken, type Config } from "./config.js";
+import { redact } from "./errors.js";
 import { FeedlyClient } from "./feedly.js";
 import { buildFolderIndex, type FolderIndex, type ScopeRules } from "./folders.js";
 
@@ -41,6 +42,12 @@ export interface Context {
   accountId(): Promise<string>;
   /** Drop the in-flight share so the next call re-reads — used after a write. */
   invalidateFolders(): void;
+  /**
+   * Last-resort scrub before anything reaches the agent. Spec §3 says the token
+   * must never appear in a result or an error; the client and error paths do
+   * this already, but an unexpected throw from anywhere else would not.
+   */
+  redactText(text: string): string;
 }
 
 export function createContext(configPath?: string): Context {
@@ -103,6 +110,9 @@ export function createContext(configPath?: string): Context {
     },
     invalidateFolders() {
       pending = undefined;
+    },
+    redactText(text: string) {
+      return redact(text, token);
     },
   };
 

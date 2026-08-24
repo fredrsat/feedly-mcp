@@ -10,6 +10,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 
 import { createContext, type Context } from "./context.js";
+import { SEARCH_CACHE_TTL_MS } from "./feedly.js";
 import { FeedlyMcpError } from "./errors.js";
 import { registerTools } from "./tools/index.js";
 
@@ -44,11 +45,14 @@ export function buildMeta(
 
 /** Structured JSON out, named errors instead of stack traces (spec §6). */
 export async function toolResult(
+  ctx: Context,
   produce: () => Promise<unknown>,
 ): Promise<{ content: Array<{ type: "text"; text: string }>; isError?: boolean }> {
   try {
     const value = await produce();
-    return { content: [{ type: "text", text: JSON.stringify(value, null, 2) }] };
+    return {
+      content: [{ type: "text", text: ctx.redactText(JSON.stringify(value, null, 2)) }],
+    };
   } catch (err) {
     const payload =
       err instanceof FeedlyMcpError
@@ -58,7 +62,10 @@ export async function toolResult(
             message: err instanceof Error ? err.message : String(err),
           };
     return {
-      content: [{ type: "text", text: JSON.stringify(payload, null, 2) }],
+      // The client and error constructors scrub the token already. This is the
+      // backstop for a throw from somewhere that does not know about it —
+      // "almost never" is not what spec §3 asks for.
+      content: [{ type: "text", text: ctx.redactText(JSON.stringify(payload, null, 2)) }],
       isError: true,
     };
   }
@@ -77,6 +84,16 @@ export async function startServer(opts: { configPath?: string } = {}): Promise<v
     return;
   }
 
+  // Every distinct query writes a cache file and nothing else removes them, so
+  // the directory would grow for as long as the tool is installed. Once at
+  // startup is enough: entries past the longest TTL can never be served anyway.
+  const longestTtl = Math.max(
+    ctx.config.cache.metadataTtlMs.value,
+    ctx.config.cache.articlesTtlMs.value,
+    SEARCH_CACHE_TTL_MS,
+  );
+  const pruned = ctx.client.pruneCache(longestTtl * 2);
+
   const server = new McpServer({ name: SERVER_NAME, version: SERVER_VERSION });
   registerTools(server, ctx);
 
@@ -85,6 +102,7 @@ export async function startServer(opts: { configPath?: string } = {}): Promise<v
 
   process.stderr.write(
     `${SERVER_NAME} ${SERVER_VERSION} ready` +
-      `${ctx.config.writes.enabled.value ? " (writes enabled)" : ""}\n`,
+      `${ctx.config.writes.enabled.value ? " (writes enabled)" : ""}` +
+      `${pruned > 0 ? ` — pruned ${pruned} stale cache entries` : ""}\n`,
   );
 }

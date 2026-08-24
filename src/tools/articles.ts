@@ -118,7 +118,7 @@ export function registerGetArticles(server: McpServer, ctx: Context): void {
       annotations: { readOnlyHint: true, openWorldHint: true },
     },
     async (args) =>
-      toolResult(async () => {
+      toolResult(ctx, async () => {
         const defaults = ctx.config.defaults;
         const limit = args.limit ?? defaults.limit.value;
         const unreadOnly = args.unread_only ?? defaults.unreadOnly.value;

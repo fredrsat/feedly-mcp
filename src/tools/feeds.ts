@@ -27,7 +27,7 @@ export function registerListFeeds(server: McpServer, ctx: Context): void {
       annotations: { readOnlyHint: true, openWorldHint: true },
     },
     async (args) =>
-      toolResult(async () => {
+      toolResult(ctx, async () => {
         const [{ index }, subscriptions, counts] = await Promise.all([
           ctx.folders(),
           ctx.client.subscriptions(ctx.config.cache.metadataTtlMs.value),
@@ -96,7 +96,7 @@ export function registerSearchFeeds(server: McpServer, ctx: Context): void {
       annotations: { readOnlyHint: true, openWorldHint: true },
     },
     async (args) =>
-      toolResult(async () => {
+      toolResult(ctx, async () => {
         const limit = args.limit ?? 10;
         const [subscriptions, found] = await Promise.all([
           ctx.client.subscriptions(ctx.config.cache.metadataTtlMs.value),

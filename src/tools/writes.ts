@@ -71,7 +71,7 @@ export function registerMarkRead(server: McpServer, ctx: Context): void {
       },
     },
     async (args) =>
-      toolResult(async () => {
+      toolResult(ctx, async () => {
         const hasEntries = args.entry_ids !== undefined && args.entry_ids.length > 0;
 
         if (!hasEntries && !args.folder) {
