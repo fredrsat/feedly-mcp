@@ -18,6 +18,12 @@ import { parseDuration } from "../config.js";
 import { resolveFolder } from "../folders.js";
 import { buildMeta, toolResult } from "../server.js";
 
+/**
+ * Entry IDs per request. Feedly documents no ceiling; this keeps requests to a
+ * size that is certainly accepted, at the cost of one call per batch.
+ */
+const ENTRY_BATCH_SIZE = 500;
+
 /** Accepts "7d" / "24h" or a unix-ms timestamp. */
 function resolveOlderThan(input: string | number | undefined): number {
   if (input === undefined) return Date.now();
@@ -87,19 +93,53 @@ export function registerMarkRead(server: McpServer, ctx: Context): void {
         if (!writes.enabled.value) throw errors.writesDisabled(false);
 
         if (hasEntries) {
-          const entryIds = args.entry_ids!;
-          await ctx.client.markRead({
-            action: "markAsRead",
-            type: "entries",
-            entryIds,
-          });
+          const entryIds = [...new Set(args.entry_ids!)];
+
+          // Feedly documents no ceiling on entryIds, which is not the same as
+          // there being none. A silently rejected oversized request would be a
+          // permanent operation that looks done and is not, so batch rather than
+          // find out. Each batch costs a call, hence the deliberate ceiling.
+          const batches: string[][] = [];
+          for (let i = 0; i < entryIds.length; i += ENTRY_BATCH_SIZE) {
+            batches.push(entryIds.slice(i, i + ENTRY_BATCH_SIZE));
+          }
+
+          let sent = 0;
+          let failedAfter: string | undefined;
+          for (const batch of batches) {
+            try {
+              await ctx.client.markRead({
+                action: "markAsRead",
+                type: "entries",
+                entryIds: batch,
+              });
+              sent += batch.length;
+            } catch (err) {
+              // Say exactly how far it got. "It failed" is useless when the
+              // successful part cannot be undone.
+              failedAfter = err instanceof Error ? err.message : String(err);
+              break;
+            }
+          }
+
           ctx.client.invalidateAfterWrite();
           ctx.invalidateFolders();
 
           return {
-            marked: entryIds.length,
-            scope: `${entryIds.length} article${entryIds.length === 1 ? "" : "s"} by ID`,
+            marked: sent,
+            requested: entryIds.length,
+            ...(entryIds.length !== args.entry_ids!.length && {
+              duplicates_removed: args.entry_ids!.length - entryIds.length,
+            }),
+            ...(batches.length > 1 && { batches: batches.length }),
+            scope: `${sent} article${sent === 1 ? "" : "s"} by ID`,
             permanent: true,
+            ...(failedAfter && {
+              partial: true,
+              note:
+                `Stopped after ${sent} of ${entryIds.length}. The ones already marked ` +
+                `cannot be undone. Cause: ${failedAfter}`,
+            }),
             meta: buildMeta(ctx, { fetchedAt: Date.now(), fromCache: false }),
           };
         }

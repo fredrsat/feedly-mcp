@@ -23,6 +23,36 @@ const PAGE_SIZE = 100;
 const MAX_PAGES = 5;
 
 /**
+ * Hard ceiling on `limit`, whatever the caller asks for.
+ *
+ * Normalisation exists so one call cannot eat the context window, and an
+ * unbounded count defeats it: a request for 400 articles produced a 308 KB
+ * response, past what a tool result can carry, so the client spilled it to a
+ * file the agent then could not reach. Fetch per folder instead of asking for
+ * everything at once.
+ */
+export const MAX_LIMIT = 200;
+
+/**
+ * Size ceiling, applied after normalisation. `limit` alone is not enough —
+ * article summaries vary enough that a safe count is not a safe payload.
+ */
+const MAX_RESPONSE_BYTES = 100_000;
+
+/** Trim from the tail until the payload fits. Returns what survived. */
+export function fitToBudget<T>(items: T[], maxBytes: number): { kept: T[]; dropped: number } {
+  let kept = items;
+  while (kept.length > 1 && Buffer.byteLength(JSON.stringify(kept), "utf8") > maxBytes) {
+    // Drop a proportional slice rather than one at a time; a 300 KB payload
+    // would otherwise re-serialise hundreds of times.
+    const excess = Buffer.byteLength(JSON.stringify(kept), "utf8") / maxBytes;
+    const target = Math.max(1, Math.floor(kept.length / Math.max(1.1, excess)));
+    kept = kept.slice(0, target);
+  }
+  return { kept, dropped: items.length - kept.length };
+}
+
+/**
  * How far back the returned articles actually reach.
  *
  * `limit` bites before `hours` does on a busy folder — asking for 24 hours and
@@ -113,14 +143,25 @@ export function registerGetArticles(server: McpServer, ctx: Context): void {
               "nothing beyond that.",
           ),
         unread_only: z.boolean().optional().describe("Skip already-read articles."),
-        limit: z.number().int().positive().optional().describe("Maximum articles to return."),
+        limit: z
+          .number()
+          .int()
+          .positive()
+          .max(MAX_LIMIT)
+          .optional()
+          .describe(
+            `Maximum articles to return, capped at ${MAX_LIMIT}. To cover more, ` +
+              "call this once per folder rather than raising the limit — a single " +
+              "huge response is too large for a tool result and gets spilled to a " +
+              "file instead.",
+          ),
       },
       annotations: { readOnlyHint: true, openWorldHint: true },
     },
     async (args) =>
       toolResult(ctx, async () => {
         const defaults = ctx.config.defaults;
-        const limit = args.limit ?? defaults.limit.value;
+        const limit = Math.min(args.limit ?? defaults.limit.value, MAX_LIMIT);
         const unreadOnly = args.unread_only ?? defaults.unreadOnly.value;
         const requestedHours = args.hours ?? defaults.hours.value;
         const { hours, clamped } = clampHours(requestedHours);
@@ -191,8 +232,12 @@ export function registerGetArticles(server: McpServer, ctx: Context): void {
         }
 
         articles.sort((a, b) => b.published - a.published);
-        const truncated = articles.length > limit || Boolean(continuation) || Boolean(stoppedEarly);
+        let truncated = articles.length > limit || Boolean(continuation) || Boolean(stoppedEarly);
         if (articles.length > limit) articles = articles.slice(0, limit);
+
+        const { kept, dropped } = fitToBudget(articles, MAX_RESPONSE_BYTES);
+        articles = kept;
+        if (dropped > 0) truncated = true;
 
         const oldest = articles.at(-1)?.published;
         const coveredHours = coverageHours(hours, truncated, oldest);
@@ -218,6 +263,13 @@ export function registerGetArticles(server: McpServer, ctx: Context): void {
               `Requested ${requestedHours} hours, clamped to ${hours}. Feedly returns ` +
               "nothing past 31 days, so a larger window would have looked like an " +
               "empty result rather than an error.",
+          }),
+          ...(dropped > 0 && {
+            size_note:
+              `Trimmed ${dropped} more article${dropped === 1 ? "" : "s"} to keep the ` +
+              `response under ${Math.round(MAX_RESPONSE_BYTES / 1000)} KB. Past that a ` +
+              `tool result gets spilled to a file rather than returned. Fetch one ` +
+              `folder at a time instead.`,
           }),
           ...(stoppedEarly && { stopped_early: stoppedEarly }),
           meta: buildMeta(ctx, { fetchedAt, fromCache: fromCache && pages > 0 }),
