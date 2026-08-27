@@ -71,16 +71,64 @@ export async function toolResult(
   }
 }
 
+/**
+ * Tool names, registered even when startup failed so the failure is visible.
+ *
+ * A server that exits on a bad config looks to the client like a connector that
+ * does not exist: it reports only "Connection closed", and the actual reason —
+ * a missing pair of quotes in a TOML file — goes to stderr, where nobody looks.
+ * An agent then concludes the connector was never installed. Staying up and
+ * answering every call with the real error turns a vanished tool into a
+ * readable one.
+ */
+const TOOL_NAMES = [
+  "list_folders",
+  "list_feeds",
+  "get_articles",
+  "unread_counts",
+  "search_feeds",
+  "mark_read",
+] as const;
+
+function registerStartupFailure(server: McpServer, reason: string): void {
+  const message =
+    `feedly-mcp could not start: ${reason}\n\n` +
+    `Nothing can be read from Feedly until this is fixed. Run "feedly-mcp doctor" ` +
+    `for the full check. This is a local configuration problem — do not work ` +
+    `around it by fetching the news another way.`;
+
+  for (const name of TOOL_NAMES) {
+    server.registerTool(
+      name,
+      {
+        title: `${name} (unavailable — configuration error)`,
+        description: message,
+        annotations: { readOnlyHint: true },
+      },
+      async () => ({
+        content: [
+          {
+            type: "text" as const,
+            text: JSON.stringify({ error: "config_invalid", message }, null, 2),
+          },
+        ],
+        isError: true,
+      }),
+    );
+  }
+}
+
 export async function startServer(opts: { configPath?: string } = {}): Promise<void> {
   let ctx: Context;
   try {
     ctx = createContext(opts.configPath);
   } catch (err) {
-    process.stderr.write(
-      `${err instanceof Error ? err.message : String(err)}\n\n` +
-        `Run "feedly-mcp doctor" for a full check.\n`,
-    );
-    process.exitCode = 1;
+    const reason = err instanceof Error ? err.message : String(err);
+    process.stderr.write(`${reason}\n\nRun "feedly-mcp doctor" for a full check.\n`);
+
+    const broken = new McpServer({ name: SERVER_NAME, version: SERVER_VERSION });
+    registerStartupFailure(broken, reason);
+    await broken.connect(new StdioServerTransport());
     return;
   }
 
