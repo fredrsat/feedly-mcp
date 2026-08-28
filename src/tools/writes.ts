@@ -164,9 +164,16 @@ export function registerMarkRead(server: McpServer, ctx: Context): void {
         // before-count as if it were the result made a sweep that touched
         // nothing read like a five-figure success, so measure the difference
         // instead. Worth one extra call on a permanent operation.
+        //
+        // The invalidation above has just cleared the cached counts, so this
+        // fetch is fresh — and it is stored under the normal TTL rather than
+        // discarded. Sweeping several folders in a row otherwise pays for the
+        // same counts twice per folder: once to measure, once for the next
+        // folders() lookup. That doubling is what put three sweeps over a
+        // 15-call session budget.
         let unreadAfter: number | null = null;
         try {
-          const after = await ctx.client.unreadCounts(0);
+          const after = await ctx.client.unreadCounts(ctx.config.cache.articlesTtlMs.value);
           unreadAfter =
             after.value.unreadcounts?.find((r) => r.id === folder.id)?.count ?? null;
         } catch {
