@@ -45,7 +45,7 @@ The file is optional. If it does not exist, defaults apply.
 List values are comma-separated:
 
 ```bash
-FEEDLY_MCP_SCOPE_INCLUDE_FOLDERS="AI,Longform,Norsk presse"
+FEEDLY_MCP_SCOPE_INCLUDE_FOLDERS="AI,Longform,Tech news"
 ```
 
 The token is the exception — it is plain `FEEDLY_TOKEN`, with no prefix.

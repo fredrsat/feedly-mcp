@@ -1,51 +1,52 @@
-# Feedly MCP-connector — spec
+# Feedly MCP connector — spec
 
-En åpen MCP-server som gir en agent lesetilgang til *brukerens eget*
-Feedly-abonnement. Distribueres fra git. Hver bruker installerer og kjører den
-selv, med sitt eget token. Ingen hosting, ingen mellomledd.
+An open MCP server that gives an agent read access to *the user's own* Feedly
+subscriptions. Distributed from git. Every user installs and runs it
+themselves, with their own token. No hosting, no middleman.
 
-API-observasjonene under «Verifisert» er testet mot live-API-et 21.08.2026.
-Dokumentet omskrevet 21.08.2026 etter at distribusjonsformen ble avklart.
-Synket med dokumentasjonen 23.08.2026.
+The API observations under "Verified" were tested against the live API on
+2026-08-21. The document was rewritten on 2026-08-21 after the distribution
+model was settled. Synced with the documentation on 2026-08-23.
 
-Dette er designdokumentet — begrunnelsene, og hva som bevisst er utelatt.
-Brukervendt dokumentasjon ligger i `README.md`, `docs/configuration.md` og
-`docs/tools.md`. Endrer du returformer eller confignøkler her, må de følge etter.
-
----
-
-## 1. Formål
-
-En agent skal kunne svare på «hva er nytt i feedene mine» uten å fjernstyre
-nettleseren. Lesing er primærmålet. Skriving (markere som lest) er sekundært og
-skal være avskrudd som standard.
-
-**Connectoren er en oversetter, ikke en applikasjon.** Den tar imot et
-verktøykall, ringer Feedly, vasker svaret og returnerer. Den akkumulerer ikke.
-
-Denne grensen avgjør mye av det som følger, så den er verdt å skrive presist:
-
-> Cache er ikke arkiv. Å huske et svar i minutter eller timer for å slippe å
-> stille samme spørsmål på nytt, er oversetterjobb. Å lagre artikler over tid
-> for å kunne svare på *nye* spørsmål, er en applikasjon.
-
-**Ikke i scope:** daglige sammendrag, rangering over tid, «hva er viktig i dag»,
-varsling, OPML-import/eksport, Boards, Notes/Highlights, Leo-regler.
-
-Alt over streken bygges i laget over connectoren — et Claude Project med
-instruksjoner, en skill, en planlagt jobb. Ikke her. Det er også det som gjør
-prosjektet lite nok til å bli ferdig.
+This is the design document — the rationale, and what is deliberately left out.
+User-facing documentation lives in `README.md`, `docs/configuration.md` and
+`docs/tools.md`. If you change return shapes or config keys here, they must
+follow.
 
 ---
 
-## 2. Distribusjonsform
+## 1. Purpose
 
-Tre lag. Bygg dem i denne rekkefølgen.
+An agent should be able to answer "what's new in my feeds" without remote
+controlling a browser. Reading is the primary goal. Writing (marking as read)
+is secondary and must be off by default.
 
-### 2.1 stdio-server via pakkeregister (gulvet — må virke)
+**The connector is a translator, not an application.** It receives a tool call,
+calls Feedly, cleans up the answer and returns it. It does not accumulate.
 
-Publiseres til npm (eller PyPI). Brukeren limer inn en blokk i MCP-konfigurasjonen
-og trenger ikke klone eller bygge noe:
+This boundary decides much of what follows, so it is worth stating precisely:
+
+> Cache is not archive. Remembering an answer for minutes or hours to avoid
+> asking the same question again is translator work. Storing articles over time
+> to be able to answer *new* questions is an application.
+
+**Not in scope:** daily digests, ranking over time, "what matters today",
+notifications, OPML import/export, Boards, Notes/Highlights, Leo rules.
+
+Everything above the line is built in the layer on top of the connector — a
+Claude Project with instructions, a skill, a scheduled job. Not here. That is
+also what makes the project small enough to finish.
+
+---
+
+## 2. Distribution model
+
+Three layers. Build them in this order.
+
+### 2.1 stdio server via package registry (the floor — must work)
+
+Published to npm (or PyPI). The user pastes a block into their MCP
+configuration and does not need to clone or build anything:
 
 ```json
 {
@@ -59,184 +60,187 @@ og trenger ikke klone eller bygge noe:
 }
 ```
 
-I Claude Code: `claude mcp add`.
+In Claude Code: `claude mcp add`.
 
-### 2.2 MCP Bundle — ettklikks-installasjon i Claude Desktop
+### 2.2 MCP Bundle — one-click install in Claude Desktop
 
-Én fil (`.mcpb`; het `.dxt` da formatet kom — verifiser gjeldende filendelse og
-CLI-navn før publisering, dette har blitt omdøpt én gang) som inneholder server,
-avhengigheter og et manifest.
+A single file (`.mcpb`; was called `.dxt` when the format launched — verify the
+current file extension and CLI name before publishing, this has been renamed
+once) containing the server, its dependencies and a manifest.
 
-Manifestet deklarerer et **innstillingsskjema** som Claude Desktop rendrer for
-brukeren. Felt merket som følsomme lagres i operativsystemets nøkkelring, ikke i
-klartekst. Verdiene sendes inn til serveren som miljøvariabler.
+The manifest declares a **settings form** that Claude Desktop renders for the
+user. Fields marked as sensitive are stored in the operating system's keychain,
+not in plain text. The values are passed to the server as environment
+variables.
 
-Dette er hovedgrunnen til kravet i §4.1: konfigurasjon må kunne komme fra
-miljøvariabler, ellers kan den ikke bundles.
+This is the main reason for the requirement in §4.1: configuration must be
+settable from environment variables, otherwise it cannot be bundled.
 
-### 2.3 MCP-registeret
+### 2.3 The MCP registry
 
-For at folk skal finne den. Oppdagelse, ikke installasjon. Kommer sist.
+So that people can find it. Discovery, not installation. Comes last.
 
-### Språkvalg
+### Language choice
 
-**TypeScript anbefales**, av én grunn: å pakke Python-avhengigheter inn i et
-bundle som skal virke på en vilkårlig maskin er merkbart mer rot enn å pakke
-`node_modules`. Skal du droppe §2.2 og bare distribuere via `uvx`, er Python
-like godt.
-
----
-
-## 3. Autentisering
-
-`Authorization: Bearer <token>` mot `https://api.feedly.com`.
-
-Hver bruker bruker sitt eget token mot sin egen konto. Serveren er aldri
-autorisasjonsserver, megler ingenting, og lagrer ingen andres legitimasjon.
-
-### Verifisert
-
-- Cookie-auth alene gir **401** — `Bearer` kreves selv fra en innlogget feedly.com-fane.
-- CORS: preflight fra `feedly.com` til `api.feedly.com` returnerer **204**.
-
-### Åpent spørsmål — hvem kan i det hele tatt skaffe et token
-
-Dokumentasjonen motsier seg selv. Dette blokkerer ikke lenger *byggingen*, men
-det avgjør hvor mange som kan bruke resultatet:
-
-- **developer.feedly.com** (gamle Cloud API): developer-token via
-  `feedly.com/v3/auth/dev`, gyldig 30 dager, oppgitt å fungere på gratiskonto.
-  Pro/Team kan fornye med refresh token.
-- **developers.feedly.com** (nyere Enterprise-doc): «Self service API tokens are
-  only available to Enterprise clients», via `feedly.com/i/team/api`.
-
-Test `feedly.com/v3/auth/dev` med en gratiskonto før du publiserer. Svaret
-bestemmer hva README skal love.
-
-### Krav
-
-- Token leses **kun** fra miljøvariabelen `FEEDLY_TOKEN` eller fra en fil med
-  0600-rettigheter. Aldri fra konfigfila.
-- Token skal aldri returneres i verktøysvar, logger eller feilmeldinger.
-- Ved 401: en tydelig «token utløpt»-feil med fornyingslenke og navn på
-  miljøvariabelen. Ikke en stacktrace.
-
-### Tokenets levetid er en UX-sak, ikke en teknisk sak
-
-30 dager på gratiskonto er den ene tingen du ikke kan fikse for brukerne dine.
-Skriv det rett ut i README, og gjør 401-meldingen så god at folk vet hva de skal
-gjøre uten å åpne et issue. Ellers får du det samme issuet hver måned.
+**TypeScript is recommended**, for one reason: packing Python dependencies into
+a bundle that must work on an arbitrary machine is noticeably messier than
+packing `node_modules`. If you drop §2.2 and only distribute via `uvx`, Python
+is just as good.
 
 ---
 
-## 4. Konfigurasjon
+## 3. Authentication
 
-### 4.1 Kilder og presedens
+`Authorization: Bearer <token>` against `https://api.feedly.com`.
 
-**Miljøvariabel → konfigfil → standardverdi.**
+Every user uses their own token against their own account. The server is never
+an authorization server, brokers nothing, and stores nobody else's credentials.
 
-Miljøvariabler må dekke *alle* innstillinger, ikke bare tokenet — bundlet i §2.2
-har ingen annen vei inn. Navnekonvensjon: `FEEDLY_MCP_<SEKSJON>_<NØKKEL>`,
-f.eks. `FEEDLY_MCP_BUDGET_DAILY_CALLS`.
+### Verified
 
-Konfigfil: `~/.config/feedly-mcp/config.toml`, overstyrbar med `--config`.
+- Cookie auth alone yields **401** — `Bearer` is required even from a logged-in feedly.com tab.
+- CORS: preflight from `feedly.com` to `api.feedly.com` returns **204**.
 
-### 4.2 Skjema
+### Open question — who can obtain a token at all
+
+The documentation contradicts itself. This no longer blocks *building*, but it
+decides how many people can use the result:
+
+- **developer.feedly.com** (the old Cloud API): developer token via
+  `feedly.com/v3/auth/dev`, valid for 30 days, stated to work on a free
+  account. Pro/Team can renew with a refresh token.
+- **developers.feedly.com** (the newer Enterprise docs): "Self service API
+  tokens are only available to Enterprise clients", via `feedly.com/i/team/api`.
+
+Test `feedly.com/v3/auth/dev` with a free account before publishing. The answer
+determines what the README should promise.
+
+### Requirements
+
+- The token is read **only** from the environment variable `FEEDLY_TOKEN` or
+  from a file with 0600 permissions. Never from the config file.
+- The token must never be returned in tool responses, logs or error messages.
+- On 401: a clear "token expired" error with a renewal link and the name of the
+  environment variable. Not a stack trace.
+
+### Token lifetime is a UX problem, not a technical one
+
+30 days on a free account is the one thing you cannot fix for your users. Say
+it plainly in the README, and make the 401 message good enough that people know
+what to do without opening an issue. Otherwise you get the same issue every
+month.
+
+---
+
+## 4. Configuration
+
+### 4.1 Sources and precedence
+
+**Environment variable → config file → default.**
+
+Environment variables must cover *all* settings, not just the token — the
+bundle in §2.2 has no other way in. Naming convention:
+`FEEDLY_MCP_<SECTION>_<KEY>`, e.g. `FEEDLY_MCP_BUDGET_DAILY_CALLS`.
+
+Config file: `~/.config/feedly-mcp/config.toml`, overridable with `--config`.
+
+### 4.2 Schema
 
 ```toml
 [feedly]
-# tokenet står ALDRI her. enten FEEDLY_TOKEN som miljøvariabel,
-# eller en fil med 0600-rettigheter:
+# the token NEVER goes here. either FEEDLY_TOKEN as an environment variable,
+# or a file with 0600 permissions:
 token_file = "~/.config/feedly-mcp/token"
-api_base   = "https://api.feedly.com"   # kun for Enterprise-tenants med egen host
+api_base   = "https://api.feedly.com"   # only for Enterprise tenants with their own host
 
 [scope]
-# hvilke mapper agenten får se i det hele tatt. tom liste = alle
+# which folders the agent gets to see at all. empty list = all
 include_folders = ["AI"]
-exclude_folders = ["Privat", "Jobb - internt"]
-default_folder  = "AI"        # brukes når agenten ikke oppgir noe
+exclude_folders = ["Private", "Work - internal"]
+default_folder  = "AI"        # used when the agent does not specify one
 
 [defaults]
 hours         = 8
 limit         = 100
 unread_only   = true
 summary_chars = 400
-full_text     = false         # slår på summary_full
+full_text     = false         # enables summary_full
 
 [budget]
-daily_calls        = 40       # av verifiserte 50 — resten spares til nettleseren
+daily_calls        = 40       # out of the verified 50 — the rest is saved for the browser
 session_calls      = 15
-session_idle_reset = "15m"    # stille periode som nullstiller sesjonstelleren
-warn_below         = 10       # advar i verktøysvaret, ikke bare i loggen
+session_idle_reset = "15m"    # quiet period that resets the session counter
+warn_below         = 10       # warn in the tool response, not just in the log
 
 [cache]
-metadata_ttl = "24h"          # kategorier + abonnementer
+metadata_ttl = "24h"          # categories + subscriptions
 articles_ttl = "15m"
-dir          = "~/.cache/feedly-mcp"   # respekterer XDG_CACHE_HOME
+dir          = "~/.cache/feedly-mcp"   # respects XDG_CACHE_HOME
 
 [writes]
-enabled        = false        # mark_read i det hele tatt
-bulk_mark_read = false        # mark_read på hele mapper
+enabled        = false        # mark_read at all
+bulk_mark_read = false        # mark_read on whole folders
 ```
 
-### 4.3 `scope` må håndheves, ikke bare filtrere menyen
+### 4.3 `scope` must be enforced, not just filter the menu
 
-Er `include_folders` satt, skal `list_folders` skjule resten **og**
-`get_articles` avvise en `folder` utenfor lista — også når agenten sender en
-rå ID den har sett et annet sted. Filtrerer du bare oppføringen, er
-avgrensningen kosmetisk.
+If `include_folders` is set, `list_folders` must hide the rest **and**
+`get_articles` must reject a `folder` outside the list — even when the agent
+sends a raw ID it has seen somewhere else. If you only filter the listing, the
+restriction is cosmetic.
 
-Dette er også stedet den personlige konteksten hører hjemme. At hovedmappa heter
-`AI` er en brukerinnstilling, ikke noe som skal ligge i koden.
+This is also where the personal context belongs. That the main folder is called
+`AI` is a user setting, not something that should live in the code.
 
 ---
 
-## 5. API-grunnlag
+## 5. API foundation
 
-### ID-former (verifisert)
+### ID shapes (verified)
 
 ```
-bruker      user/<uuid>
-kategori    user/<uuid>/category/<label|uuid>
+user        user/<uuid>
+category    user/<uuid>/category/<label|uuid>
 feed        feed/<xml-url>
 global      user/<uuid>/category/global.all
 ```
 
-Kategori-ID-en er enten et lesbart navn (eldre mapper) eller en UUID (nyere).
-Anta aldri det ene. Hent lista fra `/v3/categories` og slå opp.
+The category ID is either a readable name (older folders) or a UUID (newer
+ones). Never assume either. Fetch the list from `/v3/categories` and look it
+up.
 
-Bruker-ID hentes fra `/v3/profile`. Aldri hardkodet, aldri utledet.
+The user ID comes from `/v3/profile`. Never hardcoded, never derived.
 
-`streamId` **må** URI-enkodes.
+The `streamId` **must** be URI-encoded.
 
-### Endepunkter
+### Endpoints
 
-| Metode | Sti | Bruk |
+| Method | Path | Use |
 |---|---|---|
-| GET | `/v3/profile` | verifiser token, hent bruker-ID |
-| GET | `/v3/categories` | mapper med `id` og `label` |
-| GET | `/v3/subscriptions` | alle feeds, med `categories[]` |
-| GET | `/v3/streams/contents` | artikler med innhold |
-| GET | `/v3/streams/ids` | kun ID-er — billigere for telling |
-| GET | `/v3/markers/counts` | uleste per feed og mappe |
-| POST | `/v3/markers` | marker som lest |
-| GET | `/v3/search/feeds` | finn nye kilder |
+| GET | `/v3/profile` | verify token, get user ID |
+| GET | `/v3/categories` | folders with `id` and `label` |
+| GET | `/v3/subscriptions` | all feeds, with `categories[]` |
+| GET | `/v3/streams/contents` | articles with content |
+| GET | `/v3/streams/ids` | IDs only — cheaper for counting |
+| GET | `/v3/markers/counts` | unread per feed and folder |
+| POST | `/v3/markers` | mark as read |
+| GET | `/v3/search/feeds` | find new sources |
 
-`POST/DELETE /v3/subscriptions` er bevisst utelatt — se §8.
+`POST/DELETE /v3/subscriptions` is deliberately left out — see §8.
 
-### streams/contents — parametre (verifisert mot doc)
+### streams/contents — parameters (verified against the docs)
 
-| Param | Merknad |
+| Param | Note |
 |---|---|
-| `streamId` | påkrevd, URI-enkodet |
+| `streamId` | required, URI-encoded |
 | `count` | 1–100, default 20 |
-| `newerThan` | unix ms, **maks 31 dager tilbake** |
+| `newerThan` | unix ms, **max 31 days back** |
 | `olderThan` | unix ms |
 | `unreadOnly` | bool |
 | `ranked` | `newest` \| `oldest` |
-| `continuation` | paginering; kommer i svaret |
+| `continuation` | pagination; comes in the response |
 
-Webappen kaller den slik (fanget fra nettverksloggen):
+The web app calls it like this (captured from the network log):
 
 ```
 GET /v3/streams/contents
@@ -254,28 +258,28 @@ GET /v3/streams/contents
 
 ---
 
-## 6. Verktøyflate
+## 6. Tool surface
 
-Hold den liten. Seks verktøy dekker alt reelt bruk.
+Keep it small. Six tools cover all real use.
 
-| Verktøy | Inn | Ut |
+| Tool | In | Out |
 |---|---|---|
 | `list_folders` | – | `[{id,label,unread}]` |
 | `list_feeds` | `folder?` | `[{id,title,folders[],unread}]` |
-| `get_articles` | `folder?`, `hours?`, `unread_only?`, `limit?` | normaliserte artikler |
-| `unread_counts` | – | totalt + per mappe |
-| `search_feeds` | `query`, `limit?` | kandidatkilder med `feedId` |
-| `mark_read` | `entry_ids[]` **eller** `folder`+`older_than` | antall markert |
+| `get_articles` | `folder?`, `hours?`, `unread_only?`, `limit?` | normalized articles |
+| `unread_counts` | – | total + per folder |
+| `search_feeds` | `query`, `limit?` | candidate sources with `feedId` |
+| `mark_read` | `entry_ids[]` **or** `folder`+`older_than` | number marked |
 
-Utelatte parametre faller tilbake på `[defaults]` i konfigurasjonen.
+Omitted parameters fall back to `[defaults]` in the configuration.
 
-`folder` godtar både lesbar etikett og rå ID. Serveren slår opp mot den cachede
-kategorilista. Agenten skal aldri måtte kjenne UUID-er.
+`folder` accepts both a readable label and a raw ID. The server looks it up
+against the cached category list. The agent should never have to know UUIDs.
 
-### Normalisert artikkel
+### Normalized article
 
-Rå Feedly-JSON er tung — `content.content` kan være hele artikkelen. Normaliser
-før retur, ellers spiser ett kall hele kontekstvinduet:
+Raw Feedly JSON is heavy — `content.content` can be the entire article.
+Normalize before returning, otherwise one call eats the whole context window:
 
 ```json
 {
@@ -286,27 +290,28 @@ før retur, ellers spiser ett kall hele kontekstvinduet:
   "published": 1755800000000,
   "folders": ["AI", "AI - Local Models"],
   "engagement": 214,
-  "summary": "kuttet til summary_chars, HTML strippet"
+  "summary": "trimmed to summary_chars, HTML stripped"
 }
 ```
 
-Ikke returner `content`, `visual`, `origin` rått, eller `enclosure`.
-`summary_full` legges bak `defaults.full_text`.
+Do not return `content`, `visual`, raw `origin`, or `enclosure`.
+`summary_full` goes behind `defaults.full_text`.
 
-`folders[]` fylles lokalt fra den cachede `/v3/subscriptions` og koster ingenting.
-Uten det er dedupliseringen ugjennomsiktig — agenten kan ikke se hvorfor en
-artikkel dukket opp, eller at den dekker flere mapper samtidig.
+`folders[]` is filled in locally from the cached `/v3/subscriptions` and costs
+nothing. Without it, deduplication is opaque — the agent cannot see why an
+article appeared, or that it spans several folders at once.
 
-`get_articles` returnerer i tillegg `truncated: true` når `limit` kuttet
-resultatet. Ellers vet ikke agenten om den ser alt, og den kan ikke skille «lite
-nytt» fra «for mye til å vise».
+`get_articles` additionally returns `truncated: true` when `limit` cut the
+result. Otherwise the agent does not know whether it is seeing everything, and
+cannot distinguish "little that is new" from "too much to show".
 
-`search_feeds` returnerer `already_subscribed` per treff, avledet lokalt fra
-abonnementslista. Gratis, og hindrer at agenten foreslår kilder du har.
+`search_feeds` returns `already_subscribed` per hit, derived locally from the
+subscription list. Free, and prevents the agent from suggesting sources you
+already have.
 
-### Meta på hvert svar
+### Meta on every response
 
-Hvert verktøysvar bærer et lite meta-objekt:
+Every tool response carries a small meta object:
 
 ```json
 {
@@ -317,246 +322,257 @@ Hvert verktøysvar bærer et lite meta-objekt:
 }
 ```
 
-Det er brukerens egen kvote som brennes. De har krav på å se den. `fetched_at`
-lar agenten si «per kl. 14:03» i stedet for å late som alt er ferskt — og
-`from_cache` er det som gjør `fetched_at` tolkbart, siden et cachet svar kan være
-`articles_ttl` gammelt uten at noe annet i svaret røper det.
+It is the user's own quota being burned. They are entitled to see it.
+`fetched_at` lets the agent say "as of 14:03" instead of pretending everything
+is fresh — and `from_cache` is what makes `fetched_at` interpretable, since a
+cached answer can be `articles_ttl` old without anything else in the response
+giving it away.
 
-**Begge feltene skal være pessimistiske.** Flere verktøy bygger svaret sitt av
-mer enn én forespørsel, som kan være ferske eller cachet uavhengig av hverandre.
-`fetched_at` skal derfor rapportere den **eldste** kilden, og `from_cache` skal
-være sann når **minst én** kom fra cache. Bruker du «alle» i stedet for «minst
-én», får du `from_cache: false` ved siden av et to timer gammelt tidsstempel — og
-da er feltene verre enn ubrukelige, for de motsier hverandre.
+**Both fields must be pessimistic.** Several tools build their answer from more
+than one request, which may be fresh or cached independently of each other.
+`fetched_at` must therefore report the **oldest** source, and `from_cache` must
+be true when **at least one** came from cache. If you use "all" instead of "at
+least one", you get `from_cache: false` next to a two-hour-old timestamp — and
+then the fields are worse than useless, because they contradict each other.
 
-Fella er ikke teoretisk: den første implementasjonen hardkodet
-`fetched_at: Date.now(), from_cache: false` i `list_folders` og gjorde nøyaktig
-det denne seksjonen finnes for å hindre.
+The trap is not theoretical: the first implementation hardcoded
+`fetched_at: Date.now(), from_cache: false` in `list_folders` and did exactly
+what this section exists to prevent.
 
-### Feiltaksonomi
+### Error taxonomy
 
-| Situasjon | Svar |
+| Situation | Response |
 |---|---|
-| 401 fra Feedly | «token utløpt» + fornyingslenke + navn på miljøvariabel |
-| 429 fra Feedly | tydelig feil med `X-Ratelimit-Reset`. **Ingen retry-loop.** |
-| Budsjett brukt opp | egen feil som skiller seg fra 429 — det er serverens grense, ikke Feedlys |
-| Mappe utenfor `scope` | avvis, og si at den er utenfor konfigurert scope |
+| 401 from Feedly | "token expired" + renewal link + name of the environment variable |
+| 429 from Feedly | clear error with `X-Ratelimit-Reset`. **No retry loop.** |
+| Budget exhausted | its own error, distinct from 429 — it is the server's limit, not Feedly's |
+| Folder outside `scope` | reject, and say it is outside the configured scope |
 
 ---
 
-## 7. Rate limits — det viktigste designkravet
+## 7. Rate limits — the most important design constraint
 
-### Verifisert 23.08.2026 — dokumentasjonen tar feil
+### Verified 2026-08-23 — the documentation is wrong
 
-Ett kall til `/v3/profile` med et developer-token på en **Pro Plus**-konto
-(`FeedlyProPlusYearly144`, aktivt abonnement) ga:
+One call to `/v3/profile` with a developer token on a **Pro Plus** account
+(`FeedlyProPlusYearly144`, active subscription) gave:
 
 ```
 x-ratelimit-limit: 50
 x-ratelimit-count: 1
-x-ratelimit-reset: 41655        # ~11t34m → døgnvindu, lander nær midnatt UTC
+x-ratelimit-reset: 41655        # ~11h34m → daily window, lands near midnight UTC
 ```
 
-**50 kall i døgnet.** Ikke 250, ikke 500. Dokumentasjonen som oppgir «250 på
-gratis, 500 på Pro» stemmer ikke med det API-et faktisk sender.
+**50 calls per day.** Not 250, not 500. The documentation stating "250 on free,
+500 on Pro" does not match what the API actually sends.
 
-Ubekreftet hypotese: taket på 50 gjelder trolig **developer-tokens spesifikt**,
-ikke kontonivået. Det ville forklare motsigelsen. Verifiser mot et OAuth-token
-hvis du noen gang får et — men ikke bruk kvote på å grave i dette uten grunn.
+Unconfirmed hypothesis: the ceiling of 50 probably applies to **developer
+tokens specifically**, not the account tier. That would explain the
+contradiction. Verify against an OAuth token if you ever get one — but do not
+spend quota digging into this without reason.
 
-Praktisk konsekvens: **planlegg for 50.** Er det egentlig mer, koster antakelsen
-deg ingenting. Er det ikke, redder den prosjektet.
+Practical consequence: **plan for 50.** If it is really more, the assumption
+costs you nothing. If it is not, it saves the project.
 
-### Hva 50 betyr
+### What 50 means
 
-Én samtale der agenten kaller `list_folders`, så `unread_counts`, så
-`get_articles` på tre mapper, bruker 6+ kall. Det er åtte samtaler i døgnet.
+One conversation where the agent calls `list_folders`, then `unread_counts`,
+then `get_articles` on three folders uses 6+ calls. That is eight conversations
+a day.
 
-Dette er ikke en grense du designer rundt i etterkant. Den er premisset.
-Caching er ikke en optimalisering her — den er det som gjør verktøyet brukbart.
+This is not a limit you design around after the fact. It is the premise.
+Caching is not an optimization here — it is what makes the tool usable.
 
-Svarene bærer `X-Ratelimit-Count`, `X-Ratelimit-Limit` og `X-Ratelimit-Reset`.
-Over kvoten: HTTP 429.
+Responses carry `X-Ratelimit-Count`, `X-Ratelimit-Limit` and
+`X-Ratelimit-Reset`. Over the quota: HTTP 429.
 
-Kvoten henger på kontoen. Hver bruker kommer med sin egen — de konkurrerer ikke
-om en felles pott. Men det betyr også at en overivrig agent tømmer *brukerens*
-kvote, og da er Feedly utilgjengelig i nettleseren deres også resten av døgnet.
-Budsjettet i §4.2 er brukerens vern mot sin egen agent.
+The quota hangs on the account. Every user brings their own — they do not
+compete for a shared pool. But it also means an over-eager agent drains *the
+user's* quota, and then Feedly is unavailable in their browser too for the rest
+of the day. The budget in §4.2 is the user's protection against their own
+agent.
 
-**`daily_calls` måles kontoomfattende, ikke per server.** Den sjekkes mot
-`X-Ratelimit-Count`, som teller alle klienter på kontoen — også nettleseren. Har
-brukeren brukt 38 kall selv i dag, nekter serveren på 40 uten å ha gjort ett
-eneste. Det er tilsiktet: poenget er å etterlate en fungerende Feedly.
+**`daily_calls` is measured account-wide, not per server.** It is checked
+against `X-Ratelimit-Count`, which counts every client on the account —
+including the browser. If the user has already spent 38 calls themselves today,
+the server declines at 40 without having made a single one. That is deliberate:
+the point is to leave behind a working Feedly.
 
-Men feilmeldingen må da si begge tall. «This server's daily budget is spent»
-ville vært direkte usant i det tilfellet, og verre: den ville sendt brukeren for
-å heve et tak som ikke var problemet.
+But the error message must then state both figures. "This server's daily budget
+is spent" would be outright false in that case, and worse: it would send the
+user off to raise a ceiling that was not the problem.
 
-Krav:
+Requirements:
 
-- **Cache `/v3/categories` og `/v3/subscriptions` på disk**, ikke bare i minnet.
-  Prosessen dør mellom samtaler; uten disk-cache hentes de på nytt hver gang.
-  TTL fra `cache.metadata_ttl`, som med 50-taket bør stå på **24t**. Hentes de
-  fire ganger i døgnet, er 8 av 50 kall brukt på lister som nesten aldri endrer
-  seg. Motytelsen er at et nytt abonnement kan ta et døgn før det synes —
-  akseptabelt, gitt at `doctor --refresh` tømmer cachen når du trenger det.
-- **Ett kall per mappe, aldri ett per feed.** `streamId` på mappenivå henter alt
-  under den.
-- **Ligger alt i én toppmappe, hent bare den.** Mappetilhørighet regnes ut
-  lokalt fra den cachede `/v3/subscriptions`, som allerede oppgir `categories[]`
-  per feed. Ett kall dekker da hele abonnementet.
-- **Memoiser artikkelsvar** på (streamId, parametre) i `cache.articles_ttl`.
-  Spør agenten to ganger om samme mappe i samme samtale, skal det koste ett kall.
-- **Les `X-Ratelimit-Count` fra hvert svar** og eksponer det. Under
-  `budget.warn_below`: advarsel i verktøysvaret, ikke bare i loggen.
-- **Hardt tak** på `budget.session_calls` og `budget.daily_calls`, uansett hva
-  agenten ber om. To fallgruver, begge påvist i drift:
+- **Cache `/v3/categories` and `/v3/subscriptions` on disk**, not just in
+  memory. The process dies between conversations; without a disk cache they
+  are fetched anew every time. TTL from `cache.metadata_ttl`, which with the
+  50-call ceiling should stay at **24h**. Fetched four times a day, that is
+  8 of 50 calls spent on lists that almost never change. The trade-off is that
+  a new subscription can take a day to appear — acceptable, given that
+  `doctor --refresh` clears the cache when you need it.
+- **One call per folder, never one per feed.** A folder-level `streamId`
+  fetches everything under it.
+- **If everything lives in one top-level folder, fetch only that.** Folder
+  membership is computed locally from the cached `/v3/subscriptions`, which
+  already provides `categories[]` per feed. One call then covers the whole
+  subscription.
+- **Memoize article responses** on (streamId, parameters) within
+  `cache.articles_ttl`. If the agent asks twice about the same folder in the
+  same conversation, it should cost one call.
+- **Read `X-Ratelimit-Count` from every response** and expose it. Below
+  `budget.warn_below`: a warning in the tool response, not just in the log.
+- **Hard ceiling** at `budget.session_calls` and `budget.daily_calls`, no
+  matter what the agent asks for. Two pitfalls, both observed in operation:
 
-  **En stdio-prosess er ikke én samtale.** Klientene starter serveren én gang og
-  holder den i live så lenge appen kjører — målt til over 15 timer — og alle
-  samtaler deler den. En teller i minnet nullstilles da bare når appen avsluttes,
-  så «10 kall per sesjon» betyr i praksis «10 kall til du restarter Claude». En
-  planlagt kjøring arver et oppbrukt budsjett den aldri kan tømme. Bruk et
-  opphold i aktivitet som sesjonsgrense i stedet.
+  **A stdio process is not one conversation.** Clients start the server once
+  and keep it alive as long as the app runs — measured at over 15 hours — and
+  every conversation shares it. An in-memory counter then only resets when the
+  app exits, so "10 calls per session" in practice means "10 calls until you
+  restart Claude". A scheduled run inherits a spent budget it can never clear.
+  Use a gap in activity as the session boundary instead.
 
-  **Sjekk uten reservasjon holder ikke.** Flere verktøy fyrer samtidige kall —
-  mappeindeksen alene gjør tre. Sjekker du taket uten å telle opp i samme
-  operasjon, passerer alle tre mens telleren fortsatt står under grensen. Målt:
-  tak på 10 nådde 12, og feilmeldingen sa da «12/10», som ser ut som en teller
-  som aldri nullstilles. Reserver plassen, og gi den tilbake hvis kallet aldri
-  nådde fram.
+  **Checking without reserving does not hold.** Several tools fire concurrent
+  calls — the folder index alone makes three. If you check the ceiling without
+  counting up in the same operation, all three pass while the counter still
+  sits below the limit. Measured: a ceiling of 10 reached 12, and the error
+  message then said "12/10", which looks like a counter that never resets.
+  Reserve the slot, and give it back if the call never went out.
 
 ---
 
-## 8. Skriveoperasjoner
+## 8. Write operations
 
-`mark_read` er **irreversibelt**. Feedly har ingen angreknapp, og gjenoppretting
-krever e-post til support. Derfor:
+`mark_read` is **irreversible**. Feedly has no undo button, and recovery
+requires emailing support. Therefore:
 
-- Av som standard. Slås på med `writes.enabled`.
-- `mark_read` uten `entry_ids` — altså hele mapper — krever i tillegg
-  `writes.bulk_mark_read`. To brytere, fordi de to operasjonene har helt ulik
-  skadevidde.
-- **`unsubscribe` implementeres ikke.** Det er sletting av brukerens data, uten
-  angremulighet, utført av en agent. Verdien står ikke i forhold. La folk si opp
-  abonnementer i Feedly.
-- **Et felt som rapporterer hva en skriveoperasjon gjorde, må måles — ikke
-  antas.** Feedly returnerer ingen telling for markering på mappenivå. Første
-  implementasjon returnerte mappas ulestetall *før* kallet under navnet
-  `marked_approximately`, med en fotnote som forklarte det. I bruk leste det som
-  suksess: en feie som traff ingenting rapporterte et femsifret tall. Fotnoter
-  taper mot feltnavn. Mål differansen i stedet, og returner `null` når den ikke
-  lar seg måle.
-- Skriveoperasjoner går alltid live til Feedly og skal invalidere berørte
-  cache-oppføringer. **Berørte er mer enn tellerne:** et cachet `unreadOnly`-svar
-  inneholder fortsatt artiklene som nettopp ble markert lest, og ville servert
-  dem tilbake resten av `articles_ttl`. Både `markers/counts` og alle
-  `stream:`-oppføringer må ryddes.
-
----
-
-## 9. Arkitektur
-
-Stdio-server. Én prosess, startet av MCP-klienten ved behov, dør etterpå.
-Tokenet blir liggende hos brukeren.
-
-Fire deler, holdt fra hverandre:
-
-```
-verktøylag    MCP-verktøydefinisjoner, validering, scope-håndheving
-klientlag     Feedly-HTTP, budsjettelling, feiloversetting
-cachelag      disk, TTL-basert, kun metadata + memoiserte svar
-konfiglag     env → fil → default
-```
-
-Cachen ligger under `~/.cache/feedly-mcp/` (eller `XDG_CACHE_HOME`). Én bruker
-per installasjon — ingen brukerdimensjon i lagringen.
-
-### `doctor`-kommando
-
-`npx feedly-mcp doctor` skal:
-
-1. finne tokenet og si hvor det ble funnet (aldri skrive det ut)
-2. kalle `/v3/profile` og vise kontoen
-3. liste mapper med ID-er — som også er hjelpen brukeren trenger for å fylle ut `scope`
-4. vise kvoteforbruk og hvor lenge tokenet har igjen, hvis det lar seg lese
-5. si tydelig fra hvis konfigurasjonen peker på mapper som ikke finnes
-
-Dette er §10 steg 1 gjort om til et verktøy, og det er forskjellen mellom
-«virker ikke» og «å, tokenet er utløpt».
+- Off by default. Enabled with `writes.enabled`.
+- `mark_read` without `entry_ids` — that is, whole folders — additionally
+  requires `writes.bulk_mark_read`. Two switches, because the two operations
+  have completely different blast radii.
+- **`unsubscribe` is not implemented.** It is deletion of the user's data,
+  with no undo, performed by an agent. The value is not worth the risk. Let
+  people unsubscribe in Feedly.
+- **A field that reports what a write operation did must be measured — not
+  assumed.** Feedly returns no count for folder-level marking. The first
+  implementation returned the folder's unread count *before* the call under
+  the name `marked_approximately`, with a footnote explaining it. In use it
+  read as success: a sweep that hit nothing reported a five-figure number.
+  Footnotes lose to field names. Measure the difference instead, and return
+  `null` when it cannot be measured.
+- Write operations always go live to Feedly and must invalidate affected cache
+  entries. **Affected means more than the counters:** a cached
+  `unreadOnly` response still contains the articles that were just marked
+  read, and would serve them back for the rest of `articles_ttl`. Both
+  `markers/counts` and all `stream:` entries must be cleared.
 
 ---
 
-## 10. Byggerekkefølge
+## 9. Architecture
 
-1. `curl` mot `/v3/profile` med et developer-token fra en **gratiskonto**.
-   Avklarer §3 samtidig som det beviser kjeden.
-2. Konfiglaget med presedens env → fil → default. Alt annet henger på dette.
+Stdio server. One process, started by the MCP client on demand, dies
+afterwards. The token stays with the user.
+
+Four parts, kept apart:
+
+```
+tool layer      MCP tool definitions, validation, scope enforcement
+client layer    Feedly HTTP, budget counting, error translation
+cache layer     disk, TTL-based, only metadata + memoized responses
+config layer    env → file → default
+```
+
+The cache lives under `~/.cache/feedly-mcp/` (or `XDG_CACHE_HOME`). One user
+per installation — no user dimension in the storage.
+
+### `doctor` command
+
+`npx feedly-mcp doctor` shall:
+
+1. find the token and say where it was found (never print it)
+2. call `/v3/profile` and show the account
+3. list folders with IDs — which is also the help the user needs to fill in `scope`
+4. show quota usage and how long the token has left, if that can be read
+5. say clearly if the configuration points to folders that do not exist
+
+This is §10 step 1 turned into a tool, and it is the difference between
+"doesn't work" and "oh, the token has expired".
+
+---
+
+## 10. Build order
+
+1. `curl` against `/v3/profile` with a developer token from a **free
+   account**. Settles §3 while proving the chain.
+2. The config layer with precedence env → file → default. Everything else
+   hangs on this.
 3. `doctor`.
-4. `list_folders` + `unread_counts` — minst mulig som beviser hele kjeden.
-5. Cache, budsjett og feiltaksonomi. **Før** flere verktøy.
-6. `get_articles` med normalisering og paginering.
-7. `search_feeds` og `list_feeds`.
-8. `mark_read`, bak begge flagg.
-9. Publiser til npm. README med tokenets levetid tydelig oppe.
+4. `list_folders` + `unread_counts` — the smallest thing that proves the whole
+   chain.
+5. Cache, budget and error taxonomy. **Before** more tools.
+6. `get_articles` with normalization and pagination.
+7. `search_feeds` and `list_feeds`.
+8. `mark_read`, behind both flags.
+9. Publish to npm. README with the token lifetime clearly near the top.
 10. MCP Bundle.
-11. Registeret.
+11. The registry.
 
 ---
 
-## 11. Fallgruver
+## 11. Pitfalls
 
-- `newerThan` lenger tilbake enn 31 dager gir tomt svar, ikke feil. Derfor:
-  `hours` klemmes til maks 744 i verktøylaget, og klemmingen sies fra om i
-  svaret. Slipper du verdien gjennom urørt, ser «ingenting siste to måneder» ut
-  som et gyldig resultat.
-- `continuation` mangler i svaret når du er ved enden — ikke tolk det som feil.
-- Reddit-feeds kommer som `feed/https://api.reddit.com/subreddit/<navn>`;
-  `origin.title` er da `r/<navn>`.
-- Samme artikkel kan dukke opp i flere mapper. Dedupliser på `id`.
-- Ligger alle feeds også i en toppmappe, må du ikke summere uleste på tvers av
-  mapper — da dobbelttelles alt.
-- `engagement` er Feedlys popularitetsmål, nyttig til rangering, men mangler
-  eller er 0 på ferske saker. Ikke sorter kun på den.
-- Cache som overlever en tokenbytte kan servere data fra feil konto. Nøkle
-  cachen på bruker-ID fra `/v3/profile`.
-- Standardverdier som `hours = 8` er *dine* vaner. De skal være overstyrbare,
-  og README bør si hva de er.
+- `newerThan` further back than 31 days yields an empty response, not an error.
+  Therefore: `hours` is clamped to a max of 744 in the tool layer, and the
+  clamping is called out in the response. If you let the value through
+  untouched, "nothing in the last two months" looks like a valid result.
+- `continuation` is missing from the response when you are at the end — do not
+  interpret that as an error.
+- Reddit feeds come as `feed/https://api.reddit.com/subreddit/<name>`;
+  `origin.title` is then `r/<name>`.
+- The same article can appear in several folders. Deduplicate on `id`.
+- If all feeds also live in a top-level folder, do not sum unread counts across
+  folders — everything gets double-counted.
+- `engagement` is Feedly's popularity measure, useful for ranking, but missing
+  or 0 on fresh items. Do not sort on it alone.
+- A cache that survives a token change can serve data from the wrong account.
+  Key the cache on the user ID from `/v3/profile`.
+- Defaults like `hours = 8` are *your* habits. They must be overridable, and
+  the README should say what they are.
 
 ---
 
-## Vedlegg: kontostruktur å teste mot
+## Appendix: account structure to test against
 
-**Syntetisk eksempel.** Ingen ekte ID-er i dette dokumentet — hent dine egne fra
-`doctor`. Poenget er formen, ikke tallene.
+**Synthetic example.** No real IDs in this document — get your own from
+`doctor`. The point is the shape, not the numbers.
 
-Den strukturen som er verdt å teste mot, er en toppmappe som inneholder alt,
-pluss temamapper der de samme feedene går igjen:
+The structure worth testing against is a top-level folder containing
+everything, plus topic folders where the same feeds recur:
 
 ```
-bruker-ID   user/<uuid>
-toppmappe   user/<uuid>/category/Tema          (70 feeds)
+user ID       user/<uuid>
+top folder    user/<uuid>/category/Topic         (70 feeds)
 
-temamapper (nyere mapper har UUID som ID, ikke lesbart navn):
-  user/<uuid>/category/<uuid>   Undertema A    12 feeds
-  user/<uuid>/category/<uuid>   Undertema B    15
-  user/<uuid>/category/<uuid>   Undertema C    13
+topic folders (newer folders have a UUID as ID, not a readable name):
+  user/<uuid>/category/<uuid>   Subtopic A    12 feeds
+  user/<uuid>/category/<uuid>   Subtopic B    15
+  user/<uuid>/category/<uuid>   Subtopic C    13
   …
 ```
 
-Alle 70 ligger også i toppmappa. Det gjør denne formen til den nyttigste
-testcasen i spec-en, fordi den treffer to ting samtidig:
+All 70 also live in the top folder. That makes this shape the most useful test
+case in the spec, because it hits two things at once:
 
-- **enkeltkall-optimaliseringen i §7** — ett kall mot toppmappa dekker hele
-  abonnementet, og mappetilhørighet regnes ut lokalt.
-- **dobbelttellingsfella i §11** — summerer du uleste på tvers av mapper, teller
-  du hver artikkel minst to ganger.
+- **the single-call optimization in §7** — one call against the top folder
+  covers the whole subscription, and folder membership is computed locally.
+- **the double-counting trap in §11** — if you sum unread counts across
+  folders, you count every article at least twice.
 
-Har kontoen din denne formen, sett toppmappa som `default_folder`. Det er både
-det mest nyttige og det billigste standardvalget:
+If your account has this shape, set the top folder as `default_folder`. It is
+both the most useful and the cheapest default:
 
 ```toml
 [scope]
-include_folders = ["Tema"]
-default_folder  = "Tema"
+include_folders = ["Topic"]
+default_folder  = "Topic"
 ```
