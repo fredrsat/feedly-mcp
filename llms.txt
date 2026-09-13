@@ -1,0 +1,35 @@
+# feedly-mcp
+
+> MCP connector for reading your own Feedly subscriptions from Claude — a local stdio server where your token stays on your machine.
+
+Six tools let an agent read a Feedly account: `list_folders`, `list_feeds`, `get_articles`, `unread_counts`, `search_feeds`, and `mark_read` (writes are off by default; bulk marking needs a second explicit switch). It is a connector, not a reader app: no article storage, archive, ranking, or digests — build those on top. Not yet published to npm; install from source only.
+
+Key constraints: the real Feedly daily API quota is about 50 calls (shared with your browser session), so the server caches folder lists for 24h, serves repeated requests from a 15-minute cache, and enforces hard ceilings of 10 calls/session and 40/day. Configuration lives in `~/.config/feedly-mcp/config.toml` (scope, defaults, budget, writes); the token comes from `FEEDLY_TOKEN` or a chmod-600 token file. Stack: TypeScript (ESM), Node >= 20, `@modelcontextprotocol/sdk`, zod, smol-toml; tests run with `node --test` and make no API calls.
+
+## Docs
+
+- [README](https://github.com/fredrsat/feedly-mcp/blob/main/README.md): install, token setup, `doctor` health check, quota guidance, troubleshooting
+- [Configuration reference](https://github.com/fredrsat/feedly-mcp/blob/main/docs/configuration.md): every config.toml setting
+- [Tool reference](https://github.com/fredrsat/feedly-mcp/blob/main/docs/tools.md): inputs and return shapes for all six tools
+- [Design spec](https://github.com/fredrsat/feedly-mcp/blob/main/feedlymcpspec.md): design rationale and the deliberate not-in-scope list
+- [LICENSE](https://github.com/fredrsat/feedly-mcp/blob/main/LICENSE): MIT
+
+## Source
+
+- [src/cli.ts](https://github.com/fredrsat/feedly-mcp/blob/main/src/cli.ts): entry point (server start, `doctor`)
+- [src/server.ts](https://github.com/fredrsat/feedly-mcp/blob/main/src/server.ts): MCP server wiring
+- [src/tools/index.ts](https://github.com/fredrsat/feedly-mcp/blob/main/src/tools/index.ts): tool registry
+- [src/tools/articles.ts](https://github.com/fredrsat/feedly-mcp/blob/main/src/tools/articles.ts): get_articles
+- [src/tools/feeds.ts](https://github.com/fredrsat/feedly-mcp/blob/main/src/tools/feeds.ts): list_folders, list_feeds, unread_counts, search_feeds
+- [src/tools/writes.ts](https://github.com/fredrsat/feedly-mcp/blob/main/src/tools/writes.ts): mark_read and its safety switches
+- [src/feedly.ts](https://github.com/fredrsat/feedly-mcp/blob/main/src/feedly.ts): Feedly API client
+- [src/config.ts](https://github.com/fredrsat/feedly-mcp/blob/main/src/config.ts): config.toml loading and validation
+- [src/budget.ts](https://github.com/fredrsat/feedly-mcp/blob/main/src/budget.ts): call-budget ceilings and tracking
+- [src/cache.ts](https://github.com/fredrsat/feedly-mcp/blob/main/src/cache.ts): on-disk response cache
+- [src/normalize.ts](https://github.com/fredrsat/feedly-mcp/blob/main/src/normalize.ts): article cleanup and trimming
+
+## Optional
+
+- [.env.example](https://github.com/fredrsat/feedly-mcp/blob/main/.env.example): environment variables
+- [scripts/smoke.mjs](https://github.com/fredrsat/feedly-mcp/blob/main/scripts/smoke.mjs): end-to-end check against a live account
+- [package.json](https://github.com/fredrsat/feedly-mcp/blob/main/package.json): scripts and dependencies
